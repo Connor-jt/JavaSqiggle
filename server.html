@@ -1,0 +1,57 @@
+<!-- server.html -->
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>JSqiggle - Server</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="server.css">
+            <!-- left side panel -->
+            <div class="console_panel" >
+                <!-- top game code section -->
+                <div class="info_header">
+                    <span>Gamecode: </span>
+                    <span id="gamecode_box">...</span>
+                    <button onclick="copy_gamecode();">copy</button>
+                    <br/>
+                    <span >Game link: </span>
+                    <span >...</span>
+                    <button onclick="copy_gamelink();">copy</button>
+                    <br/>
+                </div>
+                <div class="console" id="console_text">
+                </div>
+            </div>
+            <!-- right side panel -->
+            <div class="player_panel">
+        
+                <!-- PLAYER INFOS BOX -->
+                <div class="playerbox">
+                    <div class="playerbox_header">
+                        Players:
+                    </div>
+                    <div class="playernames" id="playernames_field">
+                    </div>
+                </div>
+                <!-- CHAT TEXT BOX -->
+                <div class="chatbox">
+                    <div class="chatfield" id="chatbox_field">
+                    </div>
+                    <div class="chatinputs">
+                        <input type="text" placeholder="Enter Message.." id="server_message_field">
+                        <button onclick="send_message_as_server();">send</button>
+                    </div>
+                </div>
+            </div>
+
+
+    </head>
+    <body>
+        <script src=".\libs\PeerJS.js"></script>
+        <script src=".\src\globals.js"></script>
+        
+        <script src=".\src\units.js"></script>
+        <script src=".\src\lobby.js"></script>
+        <script src=".\src\server.js"></script>
+    </body>
+</html>

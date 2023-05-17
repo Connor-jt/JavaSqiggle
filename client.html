@@ -1,0 +1,75 @@
+<!-- index.html -->
+
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>JSqiggle - Game</title>
+        <meta charset="utf-8">
+        <link rel="stylesheet" href="client.css">
+        <div style="width:100%;height:50px;text-align: center; color:transparent;" class="ui">Info header</div>
+        <div class="hidden" id="session_ui"> <!-- in match UI -->
+            <!-- TOP UI, STATS -->
+            <div style="top:0" id="hud" class="ui">
+                <span id="timer">0:30</span>
+                <span id="action_indicator">-----</span>
+            </div>
+            <!-- TOP UI, CONTROLS -->
+            <div id="hud_r" class="hud_right">
+                <img id="move_img" src="resources/move_v2.png"/>
+                <img id="rotate_img" src="resources/rotate_v2.png"/>
+                <img id="zoom_img" src="resources/zoom_v2.png"/>
+            </div>
+            <!-- MIDDLE UI, GAME FEEDBACK -->
+            <div id="hud_mid" class="hud_middle">
+                <span id="action_phase_text">|| Action Phase ||</span>
+            </div>
+
+
+            <!-- CHAT TEXT BOX -->
+            <div class="chatbox">
+                <div class="chatfield" id="chatbox_field">
+                </div>
+                <input type="text" placeholder="Enter Message.." id="client_message_field">
+                <button onclick="send_message_as_client();">send</button>
+            </div>
+            <!-- PLAYER INFOS BOX -->
+            <div class="playerbox" id="playernames_field">
+            </div>
+        </div>
+
+        <!-- JOINING SERVER UI-->
+        <div class="status" id="joining_ui"> 
+            <!-- STATUS MIDDLE TEXT -->
+            <span id="status_field">input the server's id to start</span><br/>
+            <!-- SET SERVER UI -->
+            <div id="join_session_form">
+                <input type="text" placeholder="Enter game code.." id="join_code_field">
+                <button onclick="attempt_to_connect_to_server();">send</button>
+            </div>
+            <!-- JOINING SERVER UI -->
+            <div id="player_info_form" class="hidden">
+                <input type="text" placeholder="Enter Player Name" id="join_name_field">
+                <input type="text" placeholder="Enter Player Color" id="join_color_field">
+                <button onclick="submit_playerinfos();">send</button>
+            </div>
+
+        </div>
+    </head>
+    <body>
+        <script src=".\libs\PeerJS.js"></script>
+
+        <script src=".\libs\three.min.js"></script>
+        <script src=".\libs\OrbitControls.js"></script>
+        <script src=".\libs\simplex-noise.js"></script>
+        <script src=".\libs\seed_rand.js"></script>
+
+        <script src=".\src\globals.js"></script>
+        <script src=".\src\lobby.js"></script>
+        <script src=".\resources\unit_model.js"></script>
+        
+        <script src=".\src\terrain.js"></script>
+        <script src=".\src\units.js"></script>
+        <script src=".\src\client_units.js"></script>
+        <script src=".\src\client.js"></script>
+    </body>
+</html>

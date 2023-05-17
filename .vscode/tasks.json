@@ -1,0 +1,17 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "typescript",
+			"tsconfig": "libs/junk/tsconfig.json",
+			"problemMatcher": [
+				"$tsc"
+			],
+            "group": {
+                "kind": "build",
+                "isDefault": true
+            },
+			"label": "tsc: build - libs/junk/tsconfig.json"
+		}
+	]
+}

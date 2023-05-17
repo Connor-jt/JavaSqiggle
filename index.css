@@ -1,0 +1,30 @@
+body{
+    background-color: #111a11;
+    color: #e5e5e5;
+}
+
+.menu_items{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+}
+
+.menu_items button {
+    
+    /*background-color: #04AA6D; /* Green background */
+    /*border: 1px solid green; /* Green border */
+    /*color: white; /* White text */
+    
+    padding: 10px 24px; /* Some padding */
+    cursor: pointer; /* Pointer/hand icon */
+    width: 150px; /* Set a width if needed */
+    display: block; /* Make the buttons appear below each other */
+}
+  
+/* Add a background color on hover */
+/*.menu_items button:hover {
+    background-color: #3e8e41;
+}*/

@@ -1,0 +1,90 @@
+body {
+    background-color: #111a11;
+    color: #e5e5e5;
+    overflow: hidden;
+    margin: 0;
+}
+
+.hidden{
+    visibility: collapse;
+}
+
+.ui {
+    position: absolute;
+}
+.ui span {
+    color: #ffffff;
+    font-size: 30px;
+    font-family: 'Courier New', Courier, monospace;
+}
+.hud_right{
+    position: absolute;
+    right: 0;
+    top:0;
+}
+.hud_middle{
+    position: absolute;
+    right: 50%;
+    top:50%;
+}
+.hud_middle span{
+    color: #ffffff;
+    font-size: 25px;
+    font-family: sans-serif;
+    visibility: collapse;
+}
+.hud_right img{
+    margin: 5px;
+    display: block;
+    opacity: 0.75;
+}
+b{
+    color: #ffffff;
+}
+
+button{
+    margin: 20px;
+}
+
+
+
+.status{
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    -webkit-transform: translate(-50%, -50%);
+    transform: translate(-50%, -50%);
+}
+.chatbox{
+    background-color: #d7d7d730;
+    border: 2px solid #bfbfbf50;
+    border-radius: 3px;
+    -moz-border-radius: 3px;
+    padding: 5px;
+
+    width: 215px;
+    
+    position: absolute;
+    top: 100%;
+    -webkit-transform: translate(0%, -100%);
+    transform: translate(0%, -100%);
+}
+.chatfield{
+    margin-bottom: 5px;
+    max-height: 200px;
+    overflow-y: scroll;
+}
+.chatfield span{
+    display:block;
+}
+
+.playerbox{
+    width: 150px;
+    position: absolute;
+    left: 100%;
+    -webkit-transform: translate(-100%, 0%);
+    transform: translate(-100%, 0%);
+}
+.playerbox span{
+    display:block;
+}

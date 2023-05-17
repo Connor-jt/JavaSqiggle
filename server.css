@@ -1,0 +1,70 @@
+body{
+    background-color: #0c0c0c;
+    color: #e5e5e5;
+    margin: 0px;
+    padding: 0px;
+}
+
+.info_header{
+    background-color: #252526;
+    padding: 5px;
+    height:40px;
+}
+.console_panel{
+    position: absolute;
+    height: 100%;
+    min-height: 100%; 
+    left: 0px;
+    width: calc(100% - 300px);
+}
+.console{
+    height: calc(100% - 50px); 
+    margin-left: 5px;
+    overflow-y: scroll;
+}
+.console span{
+    display:block;
+}
+
+
+.player_panel{
+    position: absolute;
+    height: 100%;
+    min-height: 100%; 
+    right: 0px;
+    width: 300px;
+
+}
+.playerbox{
+    background-color: #333333;
+    height:150px;
+}
+.playerbox_header{
+    margin-left: 10px;
+    height:20px;
+}
+.playernames{
+    height: calc(100% - 20px);
+    margin-left: 15px;
+    overflow-y: scroll;
+}
+.playernames span{
+    display:block;
+}
+
+.chatbox{
+    border-top: 2px solid #606060;
+    height: calc(100% - 152px);
+}
+.chatfield{
+    height: calc(100% - 21px);
+    padding-left: 5px;
+    overflow-y: scroll;
+}
+.chatfield span{
+    display:block;
+}
+.chatinputs{
+    background-color: #333333;
+    height: 21px;
+}
