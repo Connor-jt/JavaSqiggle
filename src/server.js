@@ -1,6 +1,6 @@
 
 //
-var max_turn_time = 5;
+var max_turn_time = 10;
 var turn_time = max_turn_time;
 var max_action_time = 5;
 var action_time = max_action_time;
@@ -119,6 +119,16 @@ function CMD_connections_under(player_name){
         return;
     }
     post_to_console("there are no connections with username: \"" + player_name + "\"", con_warning);
+}
+function CMD_set_round_time(){
+
+}
+function CMD_set_action_time(){
+
+}
+function CMD_toggle_pause(){
+    // same as the 
+
 }
 
 // ////// //
@@ -289,7 +299,7 @@ function recieved_data_from_client(data){
                 }
             }
         }
-        post_to_console("recieved ["+ data.content.length +"] moves from: " + get_username_of_connection(connection.peer) + ", " + moves_recieved +'/' + moves_total, con_debug);
+        post_to_console("recieved ["+ data.content.length +"] moves from: " + get_username_of_connection(connection.peer) + ", " + moves_total +'/' + moves_recieved, con_note);
 
         if (moves_recieved == moves_total){
             // if we didn't return, then we all players have submitted
@@ -406,52 +416,103 @@ function commit_actions()
     // if a unit moves out of range, then request that that user now disregard that unit (delete it from their game instance)
     // if a unit's range changes, then we also need to notify users
 
-    // //////////////////////////// //
-    // PLACEHOLDER RETRIEVE SCRIPT //
-    // ////////////////////////// //
-
     // do server side processing of the actions to make sure that no sus stuff is happening
     // also fixup the good actions and add them to the list
     let actions_to_sendback = [];
-    // we really need to read the list in the order of create, attack, then move actions
-    // or just have 3 different lists for each
+    let played_units = {}; // use this to keep track of if the users are trying to be cheeky and move pieces that they aren't supposed to
+
+    // ///////////////////////// //
+    // PROCESS CREATION ACTIONS //
+    // /////////////////////// //
     for (j = 0; j < all_players_actions.length; j++){
-        if (all_players_actions[j].type == create_unit){
-            // double check that the players aren't glitching it
-            if (!server_is_anything_in_the_way(all_players_actions[j].pos)){     
-                // generate new id for this unit, then pass back the info       
-                server_unit = SERVER_CREATE_UNIT(all_players_actions[j].unit, all_players_actions[j].pos, 0); // NOT USING PLAYER IDS YET
-                server_units[server_unit.pos[0]+','+server_unit.pos[1]] = server_unit;
-                actions_to_sendback.push({ type: create_unit, unit_id: server_unit.unit_id, unit: server_unit.type, pos: server_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
-            }
-            else console.log("[SERVER] player attempted to create unit at the position of another unit, not allowed")
+        if (all_players_actions[j].type != create_unit) continue; 
+        // double check that the players aren't glitching it
+        if (server_is_anything_in_the_way(all_players_actions[j].pos)){   
+            console.log("[SERVER] player attempted to create unit at the position of another unit, not allowed");
+            continue;
         }
-        else if (all_players_actions[j].type == move_unit){
-            // we need to confirm that there are no objects in the way of this movement
-            if (!server_is_anything_in_the_way(all_players_actions[j].pos)){
-                let moved_unit = get_server_unit_by_id(all_players_actions[j].unit_id);
-                if (moved_unit != null){
-                    // update the dictionary to contain the new location of this moved unit
-                    delete server_units[moved_unit.pos[0] + ',' + moved_unit.pos[1]];
-                    server_units[all_players_actions[j].pos[0] + ',' + all_players_actions[j].pos[1]] = moved_unit;
-                    moved_unit.pos = all_players_actions[j].pos;
-                    // submit the verified information back to clients
-                    actions_to_sendback.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
-                }
-                else console.log("[SERVER] player attempted to move non-existing unit, not allowed")
-            }
-            else console.log("[SERVER] player attempted to move unit to the location of another unit, not allowed")
-        }
-        else if (all_players_actions[j].type == attack_unit){
-            // perform is in range check
-
-            // maybe perform damage test
-            
-            // send back the action
-            actions_to_sendback.push({ type: attack_unit, unit_id: all_players_actions[j].unit_id, target_unit: all_players_actions[j].target, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
-
-        }
+        // generate new id for this unit, then pass back the info       
+        server_unit = SERVER_CREATE_UNIT(all_players_actions[j].unit, all_players_actions[j].pos, all_players_actions[j].player_id); 
+        server_units[server_unit.pos[0]+','+server_unit.pos[1]] = server_unit;
+        actions_to_sendback.push({ type: create_unit, unit_id: server_unit.unit_id, unit: server_unit.type, pos: server_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
     }
+    // /////////////////////// //
+    // PROCESS ATTACK ACTIONS //
+    // ///////////////////// //
+    for (j = 0; j < all_players_actions.length; j++){
+        if (all_players_actions[j].type != attack_unit) continue;
+        // check to see if a move has already been performed with this unit
+        if (played_units[all_players_actions[j].unit_id] != undefined){
+            console.log("[SERVER] unit " + all_players_actions[j].unit_id + " has already made a move this turn");
+            continue;
+        }
+        // test whether the unit actually exists
+        let moved_unit = get_server_unit_by_id(all_players_actions[j].unit_id);
+        if (moved_unit == null){
+            console.log("[SERVER] player attempted to move non-existing unit, not allowed")
+            continue;
+        }
+        // test whether the target exists
+        let target_unit = get_server_unit_by_id(all_players_actions[j].target);
+        if (target_unit == null){
+            console.log("[SERVER] player attempted to attack non-existing unit, not allowed")
+            continue;
+        }
+        // test whether the player actually owns this unit
+        if (moved_unit.owner != all_players_actions[j].player_id){
+            console.log("[SERVER] player attempted to move unit they dont own")
+            continue;
+        }
+        // and then test whether the player DOES NOT own the target
+        if (target_unit.owner == all_players_actions[j].player_id){
+            console.log("[SERVER] player attempted to attack unit that they own")
+            continue;
+        }
+
+        // perform is in range check
+
+        // maybe perform damage test
+        
+        // send back the action
+        actions_to_sendback.push({ type: attack_unit, unit_id: all_players_actions[j].unit_id, target_unit: all_players_actions[j].target, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
+    }
+    // ///////////////////////// //
+    // PROCESS MOVEMENT ACTIONS //
+    // /////////////////////// //
+    for (j = 0; j < all_players_actions.length; j++){
+        if (all_players_actions[j].type != move_unit) continue;
+        // check to see if a move has already been performed with this unit
+        if (played_units[all_players_actions[j].unit_id] != undefined){
+            console.log("[SERVER] unit " + all_players_actions[j].unit_id + " has already made a move this turn");
+            continue;
+        }
+        // we need to confirm that there are no objects in the way of this movement
+        if (server_is_anything_in_the_way(all_players_actions[j].pos)){
+            console.log("[SERVER] player attempted to move unit to the location of another unit, not allowed")
+            continue;
+        }
+        // test whether the unit actually exists
+        let moved_unit = get_server_unit_by_id(all_players_actions[j].unit_id);
+        if (moved_unit == null){
+            console.log("[SERVER] player attempted to move non-existing unit, not allowed")
+            continue;
+        }
+        // test whether the player actually owns this unit
+        if (moved_unit.owner != all_players_actions[j].player_id){
+            console.log("[SERVER] player attempted to move unit they dont own")
+            continue;
+        }
+        // lastly we need to check if the movement is actually in range AKA VALID
+
+        // update the dictionary to contain the new location of this moved unit
+        delete server_units[moved_unit.pos[0] + ',' + moved_unit.pos[1]];
+        server_units[all_players_actions[j].pos[0] + ',' + all_players_actions[j].pos[1]] = moved_unit;
+        moved_unit.pos = all_players_actions[j].pos;
+        // submit the verified information back to clients
+        actions_to_sendback.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
+        played_units[moved_unit.unit_id] = 1;
+    }
+
     post_to_console("Action phase over, recieved [" + all_players_actions.length + "] actions, [" + actions_to_sendback.length + "] were sent", con_debug);
     submit_moves_to_client(actions_to_sendback);
     // second submit a list of actions back that the client should see
@@ -469,9 +530,6 @@ function get_server_unit_by_id(unit_id){
     return null;
 }
 
-function turn_upgrade(){
-    // idk exactly how this will work yet, we need a way of sending upgrades to players
-}
 function send_message_as_server(){
     let message = serverchatbox_text.value;
     serverchatbox_text.value = "";  // clear text input

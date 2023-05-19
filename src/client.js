@@ -113,6 +113,8 @@ function unit_see(unit, last_position){
     move_camera_to_coords(unit.pos);
 }
 function select_unit(selec_unit){
+    deselect_unit();
+    if (selec_unit.owner != our_playerid) return; // do not select units that we dont own
     currently_selected_unit = selec_unit;
     preview_moves_at(selected_tile[0], selected_tile[1], currently_selected_unit.attack_range, currently_selected_unit.move_range, onscreen_units);
 }
@@ -363,6 +365,7 @@ function enable_action_mode(){
     last_state_was_action = true;
     // make the text visible
     action_active_text.style.visibility = "visible";
+    document.body.style.cursor = "progress";
 }
 function disable_action_mode(){
     deselect_unit(); // just as a backup
@@ -385,6 +388,7 @@ function disable_action_mode(){
     if (leftovers_counter > 0){
         console.log("[CLIENT] there were " + leftovers_counter + " denied actions, cleared")
     }
+    update_cursor_type();
 }
 // //////////////////////// //
 // SERVER CALLED FUNCTIONS //
@@ -497,7 +501,7 @@ function test_whether_pos_is_occupied(position_arr){
             if (action_queue[j].pos[0] == position_arr[0] && action_queue[j].pos[1] == position_arr[1]){
                 return true;
             }
-        }else{ // attack unit
+        }else{ // attack unit // cant occur in the same spot?
 
         }
     }
@@ -507,6 +511,7 @@ function test_whether_pos_is_occupied(position_arr){
 // ////////////// //
 // CLIENT INPUTS //
 // //////////// //
+var last_hovered_tile = null;
 var hovered_tile = null; 
 var selected_tile = null; // use this for whatever
 var last_cam_vec = new THREE.Vector3(); // so we can test the last
@@ -551,13 +556,67 @@ function onPointerMove( event ) {
         }
     }
     hovered_tile = resulting_offset;
-    hightlight_tile(resulting_offset[0], resulting_offset[1]);
+    // check to see if we highlighted a diff tile or not
+    if (last_hovered_tile == null || last_hovered_tile[0] != hovered_tile[0] || last_hovered_tile[1] != hovered_tile[1]){
+        hightlight_tile(resulting_offset[0], resulting_offset[1]);
+        last_hovered_tile = hovered_tile.slice(0); // copy the offset so next tick we can compare again
+
+        // update cursor type, as we're now looking at a diff tile
+        update_cursor_type();
+    }
 
     // store last states, so we can skip the calculations if there are no changes
     last_last_vec.copy(last_vec);
     last_cam_vec.copy(controls.object.position);
 }
-// basic functions to move to tile
+function update_cursor_type(){
+    // alright lets check to see what type of cursor should be active right now
+    if (is_in_action_mode) return; // no cursor types in action mode
+
+    let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
+
+    let known_tile_test = instanced_tiles[offset_str]
+    if (known_tile_test == null){ // tile is not known
+        document.body.style.cursor = "help";
+        return;
+    }
+
+    let move_tile = movement_visual_tiles[offset_str];
+    let range_tile = range_visual_tiles[offset_str];
+
+    let hovered_over_unit = onscreen_units[offset_str];
+
+    if (hovered_over_unit != null){
+        // if its an enemy
+        if (hovered_over_unit.owner != our_playerid){
+            if (range_tile != null || move_tile != null){ // in attack range
+                document.body.style.cursor = "alias";
+                return;
+            }
+            // not in range
+            document.body.style.cursor = "no-drop";
+            return;
+        }
+        // elses its friendly
+        document.body.style.cursor = "pointer";
+        return;
+    }
+    if (range_tile != null){
+        document.body.style.cursor = "zoom-out";
+        return;
+    }
+    if (move_tile != null){
+        document.body.style.cursor = "move";
+        return;
+    }
+
+    document.body.style.cursor = "auto";
+}
+
+// /////////////////////////////// //
+// ORIENTATION LOCATION FUNCTIONS //
+// ///////////////////////////// //
+
 function move_camera_to_coords(new_coords){
     hovered_tile = new_coords;
     move_camera_to_hovered_coords();
@@ -571,7 +630,7 @@ function move_camera_to_hovered_coords(){
     hightlight_selected_tile(_pos_off[0], _pos_off[1], _height); 
 
 }
-function select_unit_at_selected_tile(){
+function interact_with_selected_tile(){
     // if theres a unit here, select them
     // this will inadvertedly make us automatically select units that we create
     // unless we create multiple in the same go, then it will select the last one, or probably the first one actually, after everything is done
@@ -586,7 +645,7 @@ function select_unit_at_selected_tile(){
             
             // deselect_unit();
             // attack target unit
-            if (movement_visual_tiles[coords_str] != null || range_visual_tiles[coords_str] != null){
+            if ( at_unit.owner != our_playerid && (movement_visual_tiles[coords_str] != null || range_visual_tiles[coords_str] != null)){
                 // then they are in range and can be attacked
                 // call attacking function
 
@@ -616,12 +675,15 @@ function select_unit_at_selected_tile(){
     }
 }
 const camera_height_above_tile = 5;
-// do our stuff and then pass the call to the controls
+
+// ////////////////////// //
+// CLIENT CONTROL INPUTS //
+// //////////////////// //
 function client_mousedown(event) {
     event.preventDefault();
     if (event.button === 0){// left click
         move_camera_to_hovered_coords();
-        if (!is_in_action_mode) select_unit_at_selected_tile();
+        if (!is_in_action_mode) interact_with_selected_tile();
     }else{ // we aren't allowing the controls to use the left click, because that will be heavily used by the game
         controls.onMouseDown(event);
 }}
@@ -642,6 +704,8 @@ function client_keydown(event){
         try_place_unit_at_selected(unit_tower);
     }
 }
+
+
 
 // /////////////////////////// //
 // NETWORKING IMPORTANT STUFF //

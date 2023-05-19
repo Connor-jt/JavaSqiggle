@@ -32,8 +32,8 @@ function setup_player_colors(player){
 //const sniper_mesh      = new THREE.CylinderGeometry(1,1,1,3);
 //const tower_mesh       = new THREE.CylinderGeometry(1,1,1,3);
 
-const worker_material  = new THREE.MeshLambertMaterial({color: unit_soldier_color, flatShading: true})
-const solider_material = new THREE.MeshLambertMaterial({color: unit_worker_color, flatShading: true})
+const worker_material  = new THREE.MeshLambertMaterial({color: unit_worker_color, flatShading: true})
+const solider_material = new THREE.MeshLambertMaterial({color: unit_soldier_color, flatShading: true})
 const sniper_material  = new THREE.MeshLambertMaterial({color: unit_sniper_color, flatShading: true})
 const tower_material   = new THREE.MeshLambertMaterial({color: unit_tower_color, flatShading: true})
 

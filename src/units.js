@@ -19,8 +19,8 @@ var unit = {
 // ///////////////////////// //
 // CHARACTER MODEL INDICIES //
 // /////////////////////// //
-const unit_soldier = 0;
-const unit_worker  = 1;
+const unit_worker  = 0;
+const unit_soldier = 1;
 const unit_sniper  = 2;
 const unit_tower   = 3;
 
@@ -41,8 +41,8 @@ function init_new_unit_object(type, position, owning_player_id){
     return n_unit;
 }
 function stats_for_unit(type){
-    if      (type == unit_soldier) return create_soldier();
-    else if (type == unit_worker)  return create_worker();
+    if      (type == unit_worker)  return create_worker();
+    else if (type == unit_soldier) return create_soldier();
     else if (type == unit_sniper)  return create_sniper();
     else if (type == unit_tower)   return create_tower();
 
