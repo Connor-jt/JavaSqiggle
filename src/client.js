@@ -360,6 +360,7 @@ var has_recieved_actions = false;
 var last_state_was_action = false;
 function enable_action_mode(){
     deselect_unit();
+    //toggle_stat_display(false, null); // hmm i dont think we should have this here
     has_recieved_actions = false;
     is_in_action_mode = true;
     last_state_was_action = true;
@@ -388,7 +389,7 @@ function disable_action_mode(){
     if (leftovers_counter > 0){
         console.log("[CLIENT] there were " + leftovers_counter + " denied actions, cleared")
     }
-    update_cursor_type();
+    update_cursor_type(); // so if we dont move cams, it'll still update
 }
 // //////////////////////// //
 // SERVER CALLED FUNCTIONS //
@@ -511,6 +512,9 @@ function test_whether_pos_is_occupied(position_arr){
 // ////////////// //
 // CLIENT INPUTS //
 // //////////// //
+// TODO: separate the pointer moved function stuff from the actual pointer moving
+//       we need to have the function run on tick like it does, but the pointer moved merely updates the mouse pos
+
 var last_hovered_tile = null;
 var hovered_tile = null; 
 var selected_tile = null; // use this for whatever
@@ -518,6 +522,12 @@ var last_cam_vec = new THREE.Vector3(); // so we can test the last
 var last_last_vec = new THREE.Vector3(); // so we can determine if there was a change
 var last_vec = new THREE.Vector3(); 
 function onPointerMove( event ) {
+    // update the location of the UI if its up
+    if (is_stat_ui_visible){
+        // ok now reposition it
+        resposition_stats_UI(event);
+    }
+
     // ///////////////////////// //
     // HIGHLIGHT HOVER POSITION // 
     // /////////////////////// //
@@ -532,6 +542,11 @@ function onPointerMove( event ) {
     }
     if (compare_vectors(last_last_vec, last_vec) && compare_vectors(last_cam_vec, controls.object.position)) return; // no movement in mouse or camera position
     if (last_vec == undefined) return;
+
+    // store last states, so we can skip the calculations if there are no changes
+    last_last_vec.copy(last_vec);
+    last_cam_vec.copy(controls.object.position);
+
     // we basically iterate through each possbile height, and test whether a tile exists at those coords
     // we always pick the higher tile, as thats going to be the one that we're looking at
     // we need to test to see 
@@ -562,23 +577,33 @@ function onPointerMove( event ) {
         last_hovered_tile = hovered_tile.slice(0); // copy the offset so next tick we can compare again
 
         // update cursor type, as we're now looking at a diff tile
-        update_cursor_type();
+        let is_unit_visible = update_cursor_type();
+        if (!is_stat_ui_visible && is_unit_visible){
+            resposition_stats_UI(event);
+        }
     }
-
-    // store last states, so we can skip the calculations if there are no changes
-    last_last_vec.copy(last_vec);
-    last_cam_vec.copy(controls.object.position);
 }
+// we actually need to return whether a unit was visible or not, so we can update the UI pos immediately
 function update_cursor_type(){
     // alright lets check to see what type of cursor should be active right now
-    if (is_in_action_mode) return; // no cursor types in action mode
+    if (is_in_action_mode) {
+        // we still need to check if someone was there
+        let hovered_over_unit_for_ui = onscreen_units[offset_str];
+        if (hovered_over_unit_for_ui != null){
+            toggle_stat_display(true, hovered_over_unit_for_ui);
+            return true; 
+        }
+        return false; // no cursor types in action mode
+    }
+    
 
     let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
 
     let known_tile_test = instanced_tiles[offset_str]
     if (known_tile_test == null){ // tile is not known
         document.body.style.cursor = "help";
-        return;
+        toggle_stat_display(false, null);
+        return false;
     }
 
     let move_tile = movement_visual_tiles[offset_str];
@@ -587,30 +612,53 @@ function update_cursor_type(){
     let hovered_over_unit = onscreen_units[offset_str];
 
     if (hovered_over_unit != null){
+        toggle_stat_display(true, hovered_over_unit);
         // if its an enemy
         if (hovered_over_unit.owner != our_playerid){
             if (range_tile != null || move_tile != null){ // in attack range
                 document.body.style.cursor = "alias";
-                return;
+                return true;
             }
             // not in range
             document.body.style.cursor = "no-drop";
-            return;
+            return true;
         }
         // elses its friendly
         document.body.style.cursor = "pointer";
-        return;
+        return true;
     }
+    toggle_stat_display(false, null);
     if (range_tile != null){
         document.body.style.cursor = "zoom-out";
-        return;
+        return false;
     }
     if (move_tile != null){
         document.body.style.cursor = "move";
-        return;
+        return false;
     }
 
     document.body.style.cursor = "auto";
+    return false;
+}
+var hover_stat_ui = document.getElementById("stats_ui");
+var hover_stat_attack = document.getElementById("hint_attack_text");
+var hover_stat_health = document.getElementById("hint_health_text");
+var is_stat_ui_visible = true;
+function toggle_stat_display(is_enabled, unit_obj){
+    is_stat_ui_visible = is_enabled;
+    if (is_stat_ui_visible){ // make it show up
+        hover_stat_ui.style.visibility = "visible";
+        // set the variables
+        hover_stat_attack.innerHTML = unit_obj.attack;
+        hover_stat_health.innerHTML = unit_obj.defense;
+    }
+    else{
+        hover_stat_ui.style.visibility = "collapse";
+    }
+}
+function resposition_stats_UI(event){
+    hover_stat_ui.style.left = ""+((event.clientX / window.innerWidth ) * 100)+"%";
+    hover_stat_ui.style.top  = "calc("+((event.clientY / window.innerHeight) * 100)+"% + 35px";
 }
 
 // /////////////////////////////// //

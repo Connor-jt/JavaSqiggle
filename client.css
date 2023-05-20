@@ -17,6 +17,29 @@ body {
     font-size: 30px;
     font-family: 'Courier New', Courier, monospace;
 }
+.centered {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.stats_mid{
+    visibility: collapse;
+    pointer-events: none;
+    position: absolute;
+    display: block;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+}
+.select_disabled{
+    user-select: none; /* For Chrome and Opera */
+   -ms-user-select: none; /* For Internet Edge and Explorer*/
+   -webkit-user-select: none; /* For Safari */
+   -moz-user-select: none; /* For Firefox */
+   -khtml-user-select: none; /* Konqueror HTML */
+}
+
 .hud_right{
     position: absolute;
     right: 0;
@@ -25,7 +48,6 @@ body {
 .hud_middle{
     position: absolute;
     right: 50%;
-    top:50%;
 }
 .hud_middle span{
     color: #ffffff;
