@@ -24,10 +24,9 @@ body {
     transform: translate(-50%, -50%);
 }
 .stats_mid{
-    visibility: collapse;
+    /*visibility: collapse; */
     pointer-events: none;
     position: absolute;
-    display: block;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);

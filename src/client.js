@@ -146,8 +146,8 @@ function animate() {
     renderer.render(scene, camera);
     controls.update();
 
-    // update 3d mouse position
-    onPointerMove();
+    // check to see if any visual ui needs updating
+    update_hovered_stuff();
 
     // runtime commit player actions to the gamestate
     if (current_action == undefined && current_action != null ) return;
@@ -519,32 +519,41 @@ var last_hovered_tile = null;
 var hovered_tile = null; 
 var selected_tile = null; // use this for whatever
 var last_cam_vec = new THREE.Vector3(); // so we can test the last
-var last_last_vec = new THREE.Vector3(); // so we can determine if there was a change
+
 var last_vec = new THREE.Vector3(); 
+var mouse_pos_changed = true;
+var mouse_pos_X = 0;
+var mouse_pos_Y = 0;
+// new mouse move event, only update data and not double run the movement tick
 function onPointerMove( event ) {
+    mouse_pos_X = event.clientX;
+    mouse_pos_Y = event.clientY;
+    mouse_pos_changed = true;
+}
+function update_hovered_stuff(){
     // update the location of the UI if its up
     if (is_stat_ui_visible){
         // ok now reposition it
-        resposition_stats_UI(event);
+        resposition_stats_UI();
     }
 
     // ///////////////////////// //
     // HIGHLIGHT HOVER POSITION // 
     // /////////////////////// //
-    if (event != null){
+    if (mouse_pos_changed){
         last_vec.set(
-            ( event.clientX / window.innerWidth ) * 2 - 1,
-            - ( event.clientY / window.innerHeight ) * 2 + 1,
+            ( mouse_pos_X / window.innerWidth ) * 2 - 1,
+            - ( mouse_pos_Y / window.innerHeight ) * 2 + 1,
             0.5 );
 
         last_vec.unproject( camera );
         last_vec.sub( camera.position ).normalize();
-    }
-    if (compare_vectors(last_last_vec, last_vec) && compare_vectors(last_cam_vec, controls.object.position)) return; // no movement in mouse or camera position
-    if (last_vec == undefined) return;
+    } // else if the cursor didn't move, check to see if the camera did, if it didn't skip this update
+    else if (compare_vectors(last_cam_vec, controls.object.position)) return; // no movement in mouse or camera position
+    if (last_vec == undefined) return; // incase we called a tick update before there was a
 
     // store last states, so we can skip the calculations if there are no changes
-    last_last_vec.copy(last_vec);
+    mouse_pos_changed = false;
     last_cam_vec.copy(controls.object.position);
 
     // we basically iterate through each possbile height, and test whether a tile exists at those coords
@@ -577,27 +586,30 @@ function onPointerMove( event ) {
         last_hovered_tile = hovered_tile.slice(0); // copy the offset so next tick we can compare again
 
         // update cursor type, as we're now looking at a diff tile
+        let prev_stat_is_ui_vis = is_stat_ui_visible; // this variable changes during the below line
         let is_unit_visible = update_cursor_type();
-        if (!is_stat_ui_visible && is_unit_visible){
-            resposition_stats_UI(event);
+        if (!prev_stat_is_ui_vis && is_unit_visible){
+            resposition_stats_UI();
         }
     }
 }
 // we actually need to return whether a unit was visible or not, so we can update the UI pos immediately
 function update_cursor_type(){
+    let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
     // alright lets check to see what type of cursor should be active right now
+    // if action mode, then we dont get cursor feedback on tiles
     if (is_in_action_mode) {
         // we still need to check if someone was there
         let hovered_over_unit_for_ui = onscreen_units[offset_str];
         if (hovered_over_unit_for_ui != null){
             toggle_stat_display(true, hovered_over_unit_for_ui);
-            return true; 
+            return true; // there was someone there, so show stat UI
         }
+        toggle_stat_display(false, null);
         return false; // no cursor types in action mode
     }
     
 
-    let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
 
     let known_tile_test = instanced_tiles[offset_str]
     if (known_tile_test == null){ // tile is not known
@@ -657,8 +669,8 @@ function toggle_stat_display(is_enabled, unit_obj){
     }
 }
 function resposition_stats_UI(event){
-    hover_stat_ui.style.left = ""+((event.clientX / window.innerWidth ) * 100)+"%";
-    hover_stat_ui.style.top  = "calc("+((event.clientY / window.innerHeight) * 100)+"% + 35px";
+    hover_stat_ui.style.left = ""+((mouse_pos_X / window.innerWidth ) * 100)+"%";
+    hover_stat_ui.style.top  = "calc("+((mouse_pos_Y / window.innerHeight) * 100)+"% + 35px";
 }
 
 // /////////////////////////////// //
