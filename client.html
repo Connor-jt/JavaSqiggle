@@ -7,6 +7,9 @@
         <meta charset="utf-8">
         <link rel="stylesheet" href="client.css">
         <div style="width:100%;height:50px;text-align: center; color:transparent;" class="ui">Info header</div>
+
+
+
         <div class="hidden" id="session_ui"> <!-- in match UI -->
             <!-- TOP UI, STATS -->
             <div style="top:0" id="hud" class="ui">
@@ -24,12 +27,12 @@
                 <span id="action_phase_text">|| Action Phase ||</span>
             </div>
             <div id="stats_ui" class="stats_mid">
-                <div >
-                    <img id="attack_img" src="resources/attack_icon_32.png"/>
+                <div style="position: relative; float: left;">
+                    <img id="attack_img"  src="resources/attack_icon_32.png"/>
                     <div id="hint_attack_text" class="centered">-1</div>
                 </div>
-                <div>
-                    <img id="health_img" src="resources/health_icon_32.png"/>
+                <div style="position: relative; float: right;">
+                    <img id="health_img" src="resources/health_icon_red_32.png"/>
                     <div id="hint_health_text" class="centered">-1</div>
                 </div>
             </div>
