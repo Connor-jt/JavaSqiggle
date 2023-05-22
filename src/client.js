@@ -116,6 +116,7 @@ function select_unit(selec_unit){
     deselect_unit();
     if (selec_unit.owner != our_playerid) return; // do not select units that we dont own
     currently_selected_unit = selec_unit;
+    // TODO: UPDATE THIS TO USE UNIT COORDS
     preview_moves_at(selected_tile[0], selected_tile[1], currently_selected_unit.attack_range, currently_selected_unit.move_range, onscreen_units);
 }
 function select_unit_at(position_Array){
@@ -171,6 +172,7 @@ function prompt_text(){
 }
 
 var current_action = null;
+var action_speed = 1.0;
 // need to have something that essentially breaks the flow if theres an action like moving or attacking
 function commit_next_action(){
     if (actions_to_commit == undefined) return;
@@ -223,7 +225,7 @@ const movement_speed = 0.045;
 const jump_height = 4.5;
 const jump_curve = 2.8;
 function PROGRESS_move_piece(){
-    current_action.offset += movement_speed;
+    current_action.offset += movement_speed*action_speed;
     // check if we've now completed the movement, if so, end this action 
     if (current_action.offset >= 1){
         // cleanup the highlight
@@ -252,18 +254,21 @@ function attack_piece(action){
     let target_unit = get_client_unit_by_id(action.target_unit);
 
     if (attacker_unit == null || target_unit == null){
-        console.log("[CLIENT] recievedd instruction to attack piece that does not exist");
+        console.log("[CLIENT] recieved instruction to attack piece that does not exist");
         return;
     }
 
     let dest = calculate_realworld_position_of(target_unit);
     let origin = calculate_realworld_position_of(attacker_unit);
-    current_action = { type: attack_unit, unit: attacker_unit, 
+    current_action = { type: attack_unit, unit: attacker_unit, target: target_unit,
         destination: dest,
         origin: origin,
         difference: dest.clone().sub(origin),
         offset: 0.0,
         outbound: true,
+        impact_offset: 0.0,
+        impact_acceleration: 0.0,
+        has_impacted: false,
         cleanup_ind: action.cleanup_ind
     };
 
@@ -271,42 +276,65 @@ function attack_piece(action){
 const attack_movement_speed = 0.045;
 const attack_jump_height = 4.5;
 const attack_jump_curve = 2.8;
+
+const attack_impact_distance = 0.36;
+const attack_impact_init_force = 0.6;
+const attack_impact_decel_rate = 0.067;
 function PROGRESS_attack_piece(){
     if (current_action.outbound){
-        current_action.offset += attack_movement_speed;
+        current_action.offset += attack_movement_speed*action_speed;
         if (current_action.offset >= 1.0){
             current_action.outbound = false; // aka we're heading back now
         }
     }
     else{ // heading back
-        current_action.offset -= attack_movement_speed;
+        current_action.offset -= attack_movement_speed*action_speed;
         // check if we've now completed the movement, if so, end this action 
-        if (current_action.offset <= 0.0){
+        if (current_action.offset <= 0.0 && current_action.impact_offset < 0.0){
             // cleanup the highlight
             clear_highlight_index(current_action.cleanup_ind);
             current_action.unit.mesh.position.copy(current_action.origin);
+            current_action.target.mesh.position.copy(current_action.destination);
             console.log("object has finished attacking")
             current_action = null;
             return;
         }
     }
-    let upwards_jump = 0;
-    if (current_action.offset < 0.5){
-        upwards_jump = (1 - Math.pow((1- (current_action.offset*2)), attack_jump_curve)) * attack_jump_height;
+    let curr_distance = null;
+    // do this check so we can continue the target's movements even if attacker finished
+    if (current_action.offset > 0.0){
+        let upwards_jump = 0;
+        if (current_action.offset < 0.5){
+            upwards_jump = (1 - Math.pow((1- (current_action.offset*2)), attack_jump_curve)) * attack_jump_height;
+        }
+        else if (current_action.offset > 0.5){ 
+            upwards_jump = (1 - Math.pow((1- (1-((current_action.offset-0.5)*2))), attack_jump_curve)) * attack_jump_height;
+        }
+        else upwards_jump = jump_height; 
+    
+        let next_step_pos = current_action.destination.clone();
+        curr_distance = current_action.difference.clone().multiplyScalar(1-current_action.offset);
+        next_step_pos.sub(curr_distance);
+        next_step_pos.y = next_step_pos.y + upwards_jump;
+        current_action.unit.mesh.position.copy(next_step_pos);
     }
-    else if (current_action.offset > 0.5){
-        upwards_jump = (1 - Math.pow((1- (1-((current_action.offset-0.5)*2))), attack_jump_curve)) * attack_jump_height;
-    }
-    else upwards_jump = jump_height; 
 
-    let next_step_pos = current_action.destination.clone();
-    next_step_pos.sub(current_action.difference.clone().multiplyScalar(1-current_action.offset));
-    next_step_pos.y = next_step_pos.y + upwards_jump;
-    current_action.unit.mesh.position.copy(next_step_pos);
+    if (!current_action.has_impacted && curr_distance != null && curr_distance.length() < attack_impact_distance){
+        current_action.has_impacted = true
+        current_action.impact_acceleration = attack_impact_init_force;
+    }
+    if (current_action.has_impacted && current_action.impact_offset >= 0.0 ){
+        // now test how far away the target is push the piece 
+        current_action.impact_offset += current_action.impact_acceleration;
+        current_action.impact_acceleration -= attack_impact_decel_rate*action_speed;
+
+        let curr_step = current_action.difference.clone().normalize().multiplyScalar(current_action.impact_offset).add(current_action.destination);
+        current_action.target.mesh.position.copy(curr_step);
+    }
 }
-const unit_drop_height = 25;
-const unit_drop_gravity = 0.023;
-const unit_drop_bounce_factor = 0.45;
+const unit_drop_height = 18.5;
+const unit_drop_gravity = 0.038;
+const unit_drop_bounce_factor = 0.38;
 function create_piece(action){ // this will be used in a lot of places i think
     let creator_player = return_player_from_id(action.player_id);
     let created_unit = CLIENT_CREATE_UNIT(action.unit, action.unit_id, action.pos, creator_player);
@@ -331,7 +359,7 @@ function create_piece(action){ // this will be used in a lot of places i think
 
 }
 function PROGRESS_create_piece(){
-    current_action.acceleraton += unit_drop_gravity;
+    current_action.acceleraton += unit_drop_gravity*action_speed;
     // bounce the object when it reaches the destination
     if (current_action.position.y <= current_action.destination.y){
         current_action.position.y = current_action.destination.y // do not go through
@@ -516,8 +544,8 @@ function test_whether_pos_is_occupied(position_arr){
 //       we need to have the function run on tick like it does, but the pointer moved merely updates the mouse pos
 
 var last_hovered_tile = null;
-var hovered_tile = null; 
-var selected_tile = null; // use this for whatever
+var hovered_tile = [0,0]; 
+var selected_tile = [0,0]; // use this for whatever
 var last_cam_vec = new THREE.Vector3(); // so we can test the last
 
 var last_vec = new THREE.Vector3(); 
@@ -671,6 +699,13 @@ function toggle_stat_display(is_enabled, unit_obj){
 function resposition_stats_UI(event){
     hover_stat_ui.style.left = ""+((mouse_pos_X / window.innerWidth ) * 100)+"%";
     hover_stat_ui.style.top  = "calc("+((mouse_pos_Y / window.innerHeight) * 100)+"% + 35px";
+}
+
+function game_speed_changed(){
+   var slider_value = document.getElementById('game_speed_range').value / 10.0;
+   slider_value += 1;
+   document.getElementById('game_speed_text').innerHTML = slider_value;
+   action_speed = slider_value;
 }
 
 // /////////////////////////////// //

@@ -18,6 +18,14 @@
             </div>
             <!-- TOP UI, CONTROLS -->
             <div id="hud_r" class="hud_right">
+                <input type="range" min="0" max="20" value="0" class="slider" id="game_speed_range" oninput="game_speed_changed();">
+                <div>
+                    Game speed: 
+                    <div id="game_speed_text">
+
+                    </div>
+                </div>
+
                 <img id="move_img" src="resources/move_v2.png"/>
                 <img id="rotate_img" src="resources/rotate_v2.png"/>
                 <img id="zoom_img" src="resources/zoom_v2.png"/>
