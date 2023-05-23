@@ -11,28 +11,35 @@
 
 
         <div class="hidden" id="session_ui"> <!-- in match UI -->
+            <!-- FULLSCREEN ACTION PHASE -->
+            <!-- MIDDLE UI, GAME FEEDBACK -->
+            <div id="cine_top_bar" style="top:0px;" class="cinemator">
+            </div>
+            <div id="cine_bot_bar" style="bottom:0px;" class="cinemator">
+            </div>
+            <div id="hud_mid">
+                <!--span id="action_phase_text">|| Action Phase ||</span-->
+            </div>
             <!-- TOP UI, STATS -->
             <div style="top:0" id="hud" class="ui">
                 <span id="timer">0:30</span>
                 <span id="action_indicator">-----</span>
             </div>
-            <!-- TOP UI, CONTROLS -->
+            <!-- PLAYER INFOS BOX -->
+            <div class="playerbox" id="playernames_field">
+            </div>
+            <!-- TOP RIGHT UI, CONTROLS -->
             <div id="hud_r" class="hud_right">
                 <input type="range" min="0" max="20" value="0" class="slider" id="game_speed_range" oninput="game_speed_changed();">
-                <div>
+                <br/>
+                <span>
                     Game speed: 
-                    <div id="game_speed_text">
-
-                    </div>
-                </div>
-
-                <img id="move_img" src="resources/move_v2.png"/>
-                <img id="rotate_img" src="resources/rotate_v2.png"/>
-                <img id="zoom_img" src="resources/zoom_v2.png"/>
-            </div>
-            <!-- MIDDLE UI, GAME FEEDBACK -->
-            <div id="hud_mid" class="hud_middle">
-                <span id="action_phase_text">|| Action Phase ||</span>
+                    <b id="game_speed_text">1</b>
+                </span>
+                <br/>
+                <img class="hud_right_img" id="move_img" src="resources/move_v2.png"/>
+                <img class="hud_right_img" id="rotate_img" src="resources/rotate_v2.png"/>
+                <img class="hud_right_img" id="zoom_img" src="resources/zoom_v2.png"/>
             </div>
             <div id="stats_ui" class="stats_mid">
                 <div style="position: relative; float: left;">
@@ -49,11 +56,8 @@
             <div class="chatbox">
                 <div class="chatfield" id="chatbox_field">
                 </div>
-                <input type="text" placeholder="Enter Message.." id="client_message_field">
+                <input type="text" placeholder="Enter Message.." id="client_message_field" style="width: 140px;">
                 <button onclick="send_message_as_client();">send</button>
-            </div>
-            <!-- PLAYER INFOS BOX -->
-            <div class="playerbox" id="playernames_field">
             </div>
         </div>
 

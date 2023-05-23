@@ -28,7 +28,6 @@ var controls;
 
 var timer_text = document.getElementById("timer");
 var action_text = document.getElementById("action_indicator");
-var action_active_text = document.getElementById("action_phase_text");
 var messagebox_text = document.getElementById("client_message_field");
 
 function initialize(map_seed){
@@ -94,6 +93,13 @@ function get_client_unit_by_id(unit_id){
     }
     return null;
 }
+function get_client_unit_KEY_by_id(unit_id){
+    for (let unit in onscreen_units){
+        if (onscreen_units[unit].unit_id == unit_id) return unit;
+    }
+    return null;
+}
+
 function does_unit_exist(query_unit_id){
     for (j = 0; j < onscreen_units.length; j++){
         if (onscreen_units[j].unit_id == query_unit_id) return true;
@@ -176,14 +182,34 @@ var action_speed = 1.0;
 // need to have something that essentially breaks the flow if theres an action like moving or attacking
 function commit_next_action(){
     if (actions_to_commit == undefined) return;
-    if (actions_to_commit.length > 0){
-        let next_action = actions_to_commit.shift();
-        if      (next_action.type == create_unit)   create_piece(next_action);
-        else if (next_action.type == move_unit)     move_piece(next_action);
-        else if (next_action.type == attack_unit)   attack_piece(next_action);
-    }
-    if (actions_to_commit.length == 0 && !last_state_was_action) disable_action_mode();
+    let next_action = get_next_action_to_commit();
+    if (next_action == null) disable_action_mode(); // if null, then there are no more actions to process
+    else if (next_action.type == create_unit)   create_piece(next_action);
+    else if (next_action.type == move_unit)     move_piece(next_action);
+    else if (next_action.type == attack_unit)   attack_piece(next_action);
+    else if (next_action.type == destroy_unit)  action_destroy_piece(next_action);
 }
+var action_phase = 0;
+const committing_create_actions  = 0;
+const committing_attack_actions  = 1;
+const committing_move_actions    = 2;
+const committing_destroy_actions = 3;
+function get_next_action_to_commit(){
+    for (let j = 0; j < actions_to_commit.length(); j++){
+        if (actions_to_commit[j].type == action_phase){
+            let result = actions_to_commit[j];
+            actions_to_commit[j].splice(j, 1);
+            return result;
+        }
+    } 
+    action_phase++;
+    if (action_phase > committing_destroy_actions){
+        return null; // no more actions to commit
+    }
+    // rerun the function so we process the next    
+    return get_next_action_to_commit();
+}
+
 function progress_current_action(){
     if      (current_action.type == create_unit)   PROGRESS_create_piece();
     else if (current_action.type == move_unit)     PROGRESS_move_piece();
@@ -221,7 +247,7 @@ function move_piece(action){
         cleanup_ind: action.cleanup_ind
     };
 }
-const movement_speed = 0.045;
+const movement_speed = 0.028;
 const jump_height = 4.5;
 const jump_curve = 2.8;
 function PROGRESS_move_piece(){
@@ -229,7 +255,7 @@ function PROGRESS_move_piece(){
     // check if we've now completed the movement, if so, end this action 
     if (current_action.offset >= 1){
         // cleanup the highlight
-        clear_highlight_index(current_action.cleanup_ind);
+        clear_highlight_index(current_action.cleanup_ind, current_action.player_id);
         current_action.unit.mesh.position.copy(current_action.destination);
         console.log("object has finished moving")
         current_action = null;
@@ -269,11 +295,12 @@ function attack_piece(action){
         impact_offset: 0.0,
         impact_acceleration: 0.0,
         has_impacted: false,
-        cleanup_ind: action.cleanup_ind
+        cleanup_ind: action.cleanup_ind,
+        target_new_health: action.new_health
     };
 
 }
-const attack_movement_speed = 0.045;
+const attack_movement_speed = 0.028;
 const attack_jump_height = 4.5;
 const attack_jump_curve = 2.8;
 
@@ -292,7 +319,7 @@ function PROGRESS_attack_piece(){
         // check if we've now completed the movement, if so, end this action 
         if (current_action.offset <= 0.0 && current_action.impact_offset < 0.0){
             // cleanup the highlight
-            clear_highlight_index(current_action.cleanup_ind);
+            clear_highlight_index(current_action.cleanup_ind, current_action.player_id);
             current_action.unit.mesh.position.copy(current_action.origin);
             current_action.target.mesh.position.copy(current_action.destination);
             console.log("object has finished attacking")
@@ -320,6 +347,8 @@ function PROGRESS_attack_piece(){
     }
 
     if (!current_action.has_impacted && curr_distance != null && curr_distance.length() < attack_impact_distance){
+        // now update the health of the unit
+        current_action.target.defense = current_action.target_new_health;
         current_action.has_impacted = true
         current_action.impact_acceleration = attack_impact_init_force;
     }
@@ -367,9 +396,8 @@ function PROGRESS_create_piece(){
         // if the unit is under and is moving too slowly, then we can assume they've stopped bouncing
         if (Math.abs(current_action.acceleraton) < unit_drop_gravity*5 ){
             // cleanup the highlight
-            clear_highlight_index(current_action.cleanup_ind);
+            clear_highlight_index(current_action.cleanup_ind, current_action.player_id);
             // finish bounce
-            console.log("object has finished bouncing")
             current_action.unit.mesh.position.copy(current_action.destination);
             current_action = null;
             return;
@@ -380,20 +408,39 @@ function PROGRESS_create_piece(){
     current_action.unit.mesh.position.copy(current_action.position);
 }
 
+function action_destroy_piece(action){
+    let target_unit = get_client_unit_by_id(action.unit_id);
+    // clear the model from the scene
+    scene.remove(target_unit.mesh);
+    // clear the visible tiles owned by the unit
+    delete_tile_circle(target_unit.pos[0], target_unit.pos[1], target_unit.vision_range);
+    // remove the piece from the unit list
+    let target_unit_key = get_client_unit_KEY_by_id(action.unit_id);
+    delete onscreen_units[target_unit_key];
+    current_action = null;
+}
 
 
 var actions_to_commit = [];
 var is_in_action_mode = false;
 var has_recieved_actions = false;
 var last_state_was_action = false;
+//var action_active_text = document.getElementById("hud_mid");
+var action_active_bot = document.getElementById("cine_top_bar");
+var action_active_top = document.getElementById("cine_bot_bar");
+
 function enable_action_mode(){
     deselect_unit();
     //toggle_stat_display(false, null); // hmm i dont think we should have this here
     has_recieved_actions = false;
     is_in_action_mode = true;
     last_state_was_action = true;
+    // reset the action process order
+    action_phase = committing_create_actions;
     // make the text visible
-    action_active_text.style.visibility = "visible";
+    //action_active_text.style.visibility = "visible";
+    action_active_top.classList.toggle('fade');
+    action_active_bot.classList.toggle('fade');
     document.body.style.cursor = "progress";
 }
 function disable_action_mode(){
@@ -402,8 +449,10 @@ function disable_action_mode(){
     select_unit_at(selected_tile);
 
     is_in_action_mode = false;
-    // make the text invisiable
-    action_active_text.style.visibility = "collapse";
+    // make the text invisible
+    //action_active_text.style.visibility = "collapse";
+    action_active_top.classList.toggle('fade');
+    action_active_bot.classList.toggle('fade');
     // cleanup any denied actions
     let leftovers_counter = 0;
     for (let key in highlight_cleanups) {
@@ -426,14 +475,13 @@ function update_time(new_time, action_time){
     // occurs once a second // update the time left text & turn count
     timer_text.innerText = Math.floor(new_time/60) + ":" + new_time%60;
     action_text.innerText = "-".repeat(((new_time == 0)? action_time : 0 ));
-    if (new_time <= 0){
-        if (!last_state_was_action) enable_action_mode();
-    } else if (last_state_was_action) {
-        // check to see if we're still processing actions
-        // if so, then its up to the action processor to allow us to act again
-        last_state_was_action = false;
-        if (actions_to_commit.length == 0) disable_action_mode();
-    }
+    // dont need this garbage because we now let players skip 
+    // if (new_time <= 0 && last_state_was_action) {
+    //     // check to see if we're still processing actions
+    //     // if so, then its up to the action processor to allow us to act again
+    //     last_state_was_action = false;
+    //     if (actions_to_commit.length == 0) disable_action_mode();
+    // }
 }
 function recieve_server_message(){
     // here we just print the contents to the little message box at the bottom right
@@ -459,7 +507,9 @@ function new_highlight_cleanup(the_entry){ // has to be in an array formT
     highlight_cleanups[curr_cleanup_index] = the_entry;
     return curr_cleanup_index;
 }
-function clear_highlight_index(index){ // this probably isn't the best idea
+function clear_highlight_index(index, player_id){ // this probably isn't the best idea
+    if (player_id != our_playerid) return;
+    if (index == -1) return;
     for (entries in highlight_cleanups[index] ){
         scene.remove(highlight_cleanups[index][entries]);
     }
@@ -507,7 +557,7 @@ function clear_units_prev_queued_move(unit_id){
         if (action_queue[j].type == move_unit || action_queue[j].type == attack_unit){
             if (action_queue[j].unit_id == unit_id){
                 // cleanup their highlighted block
-                clear_highlight_index(action_queue[j].cleanup_ind)
+                clear_highlight_index(action_queue[j].cleanup_ind, action_queue[j].player_id)
                 action_queue.splice(j, 1);
                 j--; // nlt needed but good practice anyway i think
             }
@@ -626,7 +676,7 @@ function update_cursor_type(){
     let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
     // alright lets check to see what type of cursor should be active right now
     // if action mode, then we dont get cursor feedback on tiles
-    if (is_in_action_mode) {
+    if (is_in_action_mode && !has_recieved_actions) {
         // we still need to check if someone was there
         let hovered_over_unit_for_ui = onscreen_units[offset_str];
         if (hovered_over_unit_for_ui != null){

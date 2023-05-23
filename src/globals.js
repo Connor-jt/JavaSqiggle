@@ -3,14 +3,14 @@
 // ///////////// //
 // NOTE: all actions will have the 'player_id' property set upon being recieved by the server
 const blank_action = 0; 
-const move_unit = 1;   // { pos:    unit_id: cleanup_ind: }
-const attack_unit = 2; // { target: unit_id: cleanup_ind: } // both are unit_id's
-const create_unit = 3; // { pos:    unit:    cleanup_ind: } 
+const move_unit = 1;   // { pos:    unit_id: cleanup_ind:             }
+const attack_unit = 2; // { target: unit_id: cleanup_ind: new_health: } // both are unit_id's, new_health is sent back from the server
+const create_unit = 3; // { pos:    unit:    cleanup_ind:             } 
 
 // original piece not seen - actions // ONLY SENT FROM SERVER
 const create_move_unit = 4;
 const create_attack_unit = 5;
-const destroy_unit = 6; 
+const destroy_unit = 6; // { unit_id: }
 
 
 const unit_soldier_color = 0x29FF7A;

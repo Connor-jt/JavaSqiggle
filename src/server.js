@@ -5,17 +5,6 @@ var turn_time = max_turn_time;
 var max_action_time = 5;
 var action_time = max_action_time;
 
-// starting game functionality
-let is_game_running = false;
-function start_game(garbage){
-    if (is_game_running){
-        post_to_console("The game is already running", con_warning);
-    }
-
-    is_game_running = true
-    post_to_console("The game is now started", con_success);
-    setInterval(tick, 1000);
-}
 
 // /////////////////////////////////////////// //
 // DEBUG SCRIPT TO SKIP PHASES ON ENTER PRESS //
@@ -67,10 +56,13 @@ function server_error(err){
 // CONSOLE COMMANDS //
 // /////////////// //
 CMDs_list = {
-    help: {func: CMD_help, hint: "outputs a list of all commands, or the hint of the input command name" },
-    whois_name: {func: CMD_connections_under, hint: "outputs the player connection_id's based on the input username"},
-    whois_conn: {func: CMD_whois, hint: "outputs the player name tied to the input connection id"},
-    start: {func: start_game, hint: "initiates the loop sequence that allows the game to run"}
+    help: {func: CMD_help, hint: "outputs a list of all commands, or the hint of the param: command name" },
+    whois_name: {func: CMD_connections_under, hint: "fetches connection_id linked to param: player name"},
+    whois_conn: {func: CMD_whois, hint: "fetches player name linked to param: connection id"},
+    start: {func: start_game, hint: "begins the match"},
+    round_time: {func: CMD_set_round_time, hint: "sets the max round time to param: duration"},
+    action_time: {func: CMD_set_action_time, hint: "sets the max action time to param: duration"},
+    pause: {func: CMD_toggle_pause, hint: "pauses the game if unpaused, unpauses if paused"}
 }
 function process_cmd(command, params){
     let cmd = CMDs_list[command];
@@ -120,16 +112,64 @@ function CMD_connections_under(player_name){
     }
     post_to_console("there are no connections with username: \"" + player_name + "\"", con_warning);
 }
-function CMD_set_round_time(){
-
+var is_game_running = false;
+var is_game_paused = false;
+function start_game(garbage){
+    if (is_game_running){
+        post_to_console("The game is already running", con_warning);
+        return;
+    }
+    is_game_running = true
+    post_to_console("The game is now started", con_success);
+    send_message('server', "The game has now started!");
+    setInterval(tick, 1000);
 }
-function CMD_set_action_time(){
-
+function CMD_set_round_time(round_time){
+    if (round_time == null){
+        post_to_console("you need to specify the parameter", con_warning);
+        return;
+    }
+    try {
+        max_turn_time = Number(round_time);
+        post_to_console("round time updated to [" + round_time + "] seconds", con_success);
+        send_message('server', "Round time has been changed to [" + round_time + "] Seconds!");
+    }catch{
+        post_to_console("failed to process number", con_warning);
+        return;
+    }
 }
-function CMD_toggle_pause(){
-    // same as the 
-
+function CMD_set_action_time(action_time){
+    if (round_time == null){
+        post_to_console("you need to specify the parameter", con_warning);
+        return;
+    }
+    try {
+        max_action_time = Number(action_time);
+        post_to_console("action time updated to [" + action_time + "] seconds", con_success);
+        send_message('server', "Action time has been changed to [" + action_time + "] Seconds!");
+    }catch{
+        post_to_console("failed to process number", con_warning);
+        return;
+    }
 }
+function CMD_toggle_pause(garbage){
+    if (!is_game_running){
+        post_to_console("game cannot be paused if it is not running yet", con_warning);
+        return;
+    }
+    is_game_paused = !is_game_paused;
+    if (is_game_paused){
+        post_to_console("game is now paused", con_success);
+        send_message('server', "The round timer is now paused!");
+    }
+    else{
+        post_to_console("game is now unpaused", con_success);
+        send_message('server', "The round timer is now running again!");
+    }
+}
+// CMD PLAYER LIST
+// CMD GAME SEED
+// CMD GAME SESSION ID
 
 // ////// //
 // STUFF //
@@ -260,6 +300,14 @@ function recieved_data_from_client(data){
         lastplayerid++; // so the next player has a unique id
 
         // queue them for recieiving their initial pieces next turn
+        // pick a random tile to set this player up
+        // [-64-64, -64-64] //
+        let off_x = Math.floor(Math.random() * 129) - 64;
+        let off_y = Math.floor(Math.random() * 129) - 64;
+        all_players_actions.push({ type: create_unit, pos: [off_x  , off_y  ], player_id: new_player.id, unit: unit_soldier, cleanup_ind: -1 })
+        all_players_actions.push({ type: create_unit, pos: [off_x  , off_y+1], player_id: new_player.id, unit: unit_worker,  cleanup_ind: -1 })
+        all_players_actions.push({ type: create_unit, pos: [off_x+1, off_y  ], player_id: new_player.id, unit: unit_soldier, cleanup_ind: -1 })
+        all_players_actions.push({ type: create_unit, pos: [off_x+1, off_y+1], player_id: new_player.id, unit: unit_worker,  cleanup_ind: -1 })
 
         send_message('server', new_player.name + " has joined the game!");
         UI_addplayer(new_player.name, new_player.id, new_player.color);
@@ -344,28 +392,9 @@ function copy_gamelink(){
 }
 
 
-function initialize_new_player(name, player, connection_object)
-{
-    // here we find a location for, and spawn in that player's initial units
-}
-
-function create_new_unit()
-{
-    // has to give this to a player
-    // generate unique ID for this unit, so communications can occur
-}
-
-function discover_tiles()
-{
-    // this is called anytime a unit moves, or gains sight or whatever
-    // we then call the local function on that client, to generate the tiles
-    // basically with this, we look for items that are on the tiles to discover
-    // if there are items there, then we will submit that information to the client
-    // so they can display it correctly
-    // the items means either troops or land alterations
-}
-
 function tick(){
+    // not the best solution, but it works for now
+    if (is_game_paused) return; // if paused then do not progress the timer
     // count timer down and display time to all players
     // upon time reaching 0, proceed to action phase
     if (is_awaiting_feedback) return;
@@ -420,7 +449,7 @@ function commit_actions()
     // also fixup the good actions and add them to the list
     let actions_to_sendback = [];
     let played_units = {}; // use this to keep track of if the users are trying to be cheeky and move pieces that they aren't supposed to
-
+    let destroyed_units = [];
     // ///////////////////////// //
     // PROCESS CREATION ACTIONS //
     // /////////////////////// //
@@ -472,9 +501,12 @@ function commit_actions()
         // perform is in range check
 
         // maybe perform damage test
-        
+        target_unit.defense -= moved_unit.attack;
+        if (target_unit.defense <= 0){ // target was killed
+            destroyed_units.push(target_unit);
+        }
         // send back the action
-        actions_to_sendback.push({ type: attack_unit, unit_id: all_players_actions[j].unit_id, target_unit: all_players_actions[j].target, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
+        actions_to_sendback.push({ type: attack_unit, unit_id: all_players_actions[j].unit_id, target_unit: all_players_actions[j].target, new_health: target_unit.defense, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
     }
     // ///////////////////////// //
     // PROCESS MOVEMENT ACTIONS //
@@ -513,6 +545,17 @@ function commit_actions()
         played_units[moved_unit.unit_id] = 1;
     }
 
+    // //////////////////////// //
+    // PROCESS DESTROYED UNITS //
+    // ////////////////////// //
+    for (let j = 0; j < destroyed_units.length; j++){
+        actions_to_sendback.push({ type: destroy_unit, unit_id: destroyed_units[j].unit_id });
+        // then delete the unit from the match
+        let destroyed_unit_key = get_server_unit_KEY_by_id(destroyed_units[j].unit_id);
+        // i feel like theres more references that we need to scrub when doing this
+        delete server_units[destroyed_unit_key];
+    }
+
     post_to_console("Action phase over, recieved [" + all_players_actions.length + "] actions, [" + actions_to_sendback.length + "] were sent", con_debug);
     submit_moves_to_client(actions_to_sendback);
     // second submit a list of actions back that the client should see
@@ -526,6 +569,12 @@ function server_is_anything_in_the_way(pos_array){
 function get_server_unit_by_id(unit_id){
     for (let unit in server_units){
         if (server_units[unit].unit_id == unit_id) return server_units[unit];
+    }
+    return null;
+}
+function get_server_unit_KEY_by_id(unit_id){
+    for (let unit in server_units){
+        if (server_units[unit].unit_id == unit_id) return unit;
     }
     return null;
 }
@@ -578,7 +627,6 @@ function request_clients_moves(){
 }
 function submit_moves_to_client(actions_to_sendback){
     broadcast_to_all_players(SERVER_sendback_moves, actions_to_sendback);
-
 }
 
 // ///////////////////////////////// //

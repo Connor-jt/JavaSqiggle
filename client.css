@@ -39,14 +39,23 @@ body {
    -khtml-user-select: none; /* Konqueror HTML */
 }
 
-.hud_right{
-    position: absolute;
-    right: 0;
-    top:0;
+.cinemator {
+    position: absolute; 
+    width: 100%; 
+    background-color:black;
+    
+    height: 95px;
+
+    opacity: 0;
+    transition: opacity 1s; 
 }
+
+.cinemator.fade {
+  opacity: 1;
+}
+
 .hud_middle{
     position: absolute;
-    right: 50%;
 }
 .hud_middle span{
     color: #ffffff;
@@ -54,11 +63,8 @@ body {
     font-family: sans-serif;
     visibility: collapse;
 }
-.hud_right img{
-    margin: 5px;
-    display: block;
-    opacity: 0.75;
-}
+
+
 b{
     color: #ffffff;
 }
@@ -83,7 +89,7 @@ button{
     -moz-border-radius: 3px;
     padding: 5px;
 
-    width: 215px;
+    width: 295px;
     
     position: absolute;
     top: 100%;
@@ -99,10 +105,25 @@ button{
     display:block;
 }
 
+.hud_right{
+    position: absolute;
+    width: 175px;
+    right: 0;
+    top:0;
+}
+.hud_right_img{
+    /*margin: 5px;*/
+    display: block;
+    opacity: 0.75;
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+}
 .playerbox{
+    margin-right: 175px;
     width: 150px;
     position: absolute;
-    left: 100%;
+    left: calc(100% - 175px);
     -webkit-transform: translate(-100%, 0%);
     transform: translate(-100%, 0%);
 }
