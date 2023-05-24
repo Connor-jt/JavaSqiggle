@@ -1,6 +1,22 @@
 body{
     background-color: #111a11;
     color: #e5e5e5;
+    margin: 0px;
+    padding: 0px;
+}
+.c_bot{
+    position: absolute; 
+    width: 100%; 
+    background-image:linear-gradient(transparent, black);
+    bottom:0px;
+    height: 95px;
+}
+
+.mid_sort{
+    text-align: center;
+    position: relative;
+    -webkit-transform: translate(-50%, 0%);
+    transform: translate(-50%, 0%);
 }
 
 .menu_items{
@@ -8,20 +24,26 @@ body{
     left: 50%;
     top: 50%;
     
-    -webkit-transform: translate(-50%, -50%);
-    transform: translate(-50%, -50%);
+    -webkit-transform: translate(0%, -50%);
+    transform: translate(0%, -50%);
 }
 
 .menu_items button {
+    background-image: linear-gradient(to right,#131313, #3b3b3b);
+    /*background-color: ; /* Green background */
+    border: 0px solid #3b3b3b; /* Green border */
+    color: #cfcfcf; /* White text */
+    margin-bottom: 3px;
     
-    /*background-color: #04AA6D; /* Green background */
-    /*border: 1px solid green; /* Green border */
-    /*color: white; /* White text */
-    
+
     padding: 10px 24px; /* Some padding */
     cursor: pointer; /* Pointer/hand icon */
-    width: 150px; /* Set a width if needed */
+    width: 248px; /* Set a width if needed */
     display: block; /* Make the buttons appear below each other */
+}
+.menu_items button:hover {
+  background-image: linear-gradient(to right,green, #3b3b3b); /* Green */
+  color: white;
 }
   
 /* Add a background color on hover */
