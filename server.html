@@ -6,19 +6,19 @@
         <title>JSqiggle - Server</title>
         <meta charset="utf-8">
         <link rel="stylesheet" href="server.css">
+            <!-- top game code section -->
+            <div class="info_header">
+                <span>Gamecode: </span>
+                <span id="gamecode_box">...</span>
+                <button onclick="copy_gamecode();">copy</button>
+                <br/>
+                <span >Game link: </span>
+                <span >...</span>
+                <button onclick="copy_gamelink();">copy</button>
+                <br/>
+            </div>
             <!-- left side panel -->
             <div class="console_panel" >
-                <!-- top game code section -->
-                <div class="info_header">
-                    <span>Gamecode: </span>
-                    <span id="gamecode_box">...</span>
-                    <button onclick="copy_gamecode();">copy</button>
-                    <br/>
-                    <span >Game link: </span>
-                    <span >...</span>
-                    <button onclick="copy_gamelink();">copy</button>
-                    <br/>
-                </div>
                 <div class="console" id="console_text">
                 </div>
             </div>
@@ -27,9 +27,6 @@
         
                 <!-- PLAYER INFOS BOX -->
                 <div class="playerbox">
-                    <div class="playerbox_header">
-                        Players:
-                    </div>
                     <div class="playernames" id="playernames_field">
                     </div>
                 </div>

@@ -6,19 +6,22 @@ body{
 }
 
 .info_header{
+    position: absolute;
+    width: 100%;
     background-color: #252526;
+    box-sizing: border-box;
     padding: 5px;
-    height:40px;
+    height:50px;
 }
 .console_panel{
     position: absolute;
-    height: 100%;
-    min-height: 100%; 
+    top: 50px;
+    height: calc(100% - 50px);
     left: 0px;
     width: calc(100% - 300px);
 }
 .console{
-    height: calc(100% - 50px); 
+    height: 100%;
     margin-left: 5px;
     overflow-y: scroll;
 }
@@ -29,14 +32,12 @@ body{
 
 .player_panel{
     position: absolute;
-    height: 100%;
-    min-height: 100%; 
+    height: calc(100% - 50px);
+    top: 50px;
     right: 0px;
     width: 300px;
-
 }
 .playerbox{
-    background-color: #333333;
     height:150px;
 }
 .playerbox_header{
@@ -44,7 +45,7 @@ body{
     height:20px;
 }
 .playernames{
-    height: calc(100% - 20px);
+    height: 100%;
     margin-left: 15px;
     overflow-y: scroll;
 }
@@ -53,7 +54,7 @@ body{
 }
 
 .chatbox{
-    border-top: 2px solid #606060;
+    border-top: 2px solid #181818;
     height: calc(100% - 152px);
 }
 .chatfield{

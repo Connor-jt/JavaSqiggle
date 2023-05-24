@@ -56,13 +56,18 @@ function server_error(err){
 // CONSOLE COMMANDS //
 // /////////////// //
 CMDs_list = {
-    help: {func: CMD_help, hint: "outputs a list of all commands, or the hint of the param: command name" },
-    whois_name: {func: CMD_connections_under, hint: "fetches connection_id linked to param: player name"},
-    whois_conn: {func: CMD_whois, hint: "fetches player name linked to param: connection id"},
-    start: {func: start_game, hint: "begins the match"},
-    round_time: {func: CMD_set_round_time, hint: "sets the max round time to param: duration"},
-    action_time: {func: CMD_set_action_time, hint: "sets the max action time to param: duration"},
-    pause: {func: CMD_toggle_pause, hint: "pauses the game if unpaused, unpauses if paused"}
+    help:       {func: CMD_help,                 hint: "outputs a list of all commands, or the hint of the param: command name. or to print all hints, param: 'all'" },
+    whois_name: {func: CMD_connections_under,    hint: "prints player data linked to param: player name"},
+    whois_conn: {func: CMD_whois,                hint: "prints player data linked to param: connection id"},
+    whois_id:   {func: CMD_whois_id,             hint: "prints player data linked to param: player id"},
+    start:      {func: start_game,               hint: "begins the match"},
+    round_time: {func: CMD_set_round_time,       hint: "sets the max round time to param: duration"},
+    action_time:{func: CMD_set_action_time,      hint: "sets the max action time to param: duration"},
+    pause:      {func: CMD_toggle_pause,         hint: "pauses the game if unpaused, unpauses if paused"},
+    players:    {func: CMD_print_player_details, hint: "prints out all players, or the player data specified by param: connection_id/id/name"},
+    seed:       {func: CMD_get_seed,             hint: "prints out the current session's seed string"},
+    id:         {func: CMD_get_session_id,       hint: "prints the current session's id (players will need this to connect)"},
+    clear:      {func: CMD_clear_chat,           hint: "clears all text from the console output window"},
 }
 function process_cmd(command, params){
     let cmd = CMDs_list[command];
@@ -80,6 +85,11 @@ function CMD_help(specific_command){
         }
         post_to_console(string, con_debug);
     }
+    else if (specific_command == "all"){
+        for (let key in CMDs_list){
+            post_to_console(key + ": " + CMDs_list[key].hint, con_debug);
+        }
+    }
     else{
         let cmd = CMDs_list[specific_command];
         if (cmd == null){
@@ -95,22 +105,28 @@ function CMD_whois(player_connection_id){
         post_to_console("there is no with connection: \"" + player_connection_id + "\"", con_warning);
         return;
     }
-    post_to_console("connection \"" + player_connection_id + "\" is \"" + player.name + "\"", con_debug);
+    print_player_details(player);
 }
 function CMD_connections_under(player_name){
-    let string = "connections with username: \"" + player_name + "\": ";
-    let num_of_matches = 0;
-    for (let key in players){
-        let current = players[key];
-        if (current.name == player_name){
-            num_of_matches++;
-            string += '"' + current.connection_id + '" ';
-    }}
-    if (num_of_matches > 0){
-        post_to_console(string, con_debug);
+    let matched_players = get_user_OBJECTS_from_name(player_name);
+    // test to see if the list was empty
+    if (matched_players.length == 0){
+        post_to_console("there are no connections with username: \"" + player_name + "\"", con_warning);
         return;
     }
-    post_to_console("there are no connections with username: \"" + player_name + "\"", con_warning);
+    // else print list
+    for (let j = 0; j < matched_players.length; j++){
+        print_player_details(matched_players[j]);
+    }
+}
+function CMD_whois_id(player_id){
+    let found_player = get_user_object_from_id(player_id);
+    if (found_player != null){
+        //post_to_console("player id [" + found_player.id + "] is connection id: " + found_player.connection_id, con_debug);
+        print_player_details(found_player);
+        return;
+    }
+    post_to_console("there are no players with id: \"" + player_id + "\"", con_warning);
 }
 var is_game_running = false;
 var is_game_paused = false;
@@ -167,9 +183,59 @@ function CMD_toggle_pause(garbage){
         send_message('server', "The round timer is now running again!");
     }
 }
-// CMD PLAYER LIST
-// CMD GAME SEED
-// CMD GAME SESSION ID
+function CMD_print_player_details(specific_player){
+    if (specific_player == "" || specific_player == null){
+        // regular print all
+        for (let key in players){
+            print_player_details(players[key]);
+        } 
+        return;
+    }
+
+    {   // first attempt to match connection id
+        let found_player = players[specific_player];
+        if (found_player != null){
+            print_player_details(found_player);
+            return;
+    }}
+    
+    {   // then attempt to match player id
+        let found_player = get_user_object_from_id(specific_player);
+        if (found_player != null){
+            print_player_details(found_player);
+            return;
+    }}
+
+    {   // then attempt to match player name
+        let matched_players = get_user_OBJECTS_from_name(specific_player);
+        if (matched_players.length > 0){
+            for (let j = 0; j < matched_players.length; j++){
+                print_player_details(matched_players[j]);
+            }
+            return;
+    }}
+
+    // failed to match with anything
+    post_to_console("failed to find any matches with: \"" + specific_player + "\"", con_warning);
+    return;
+}
+function print_player_details(player_object){
+    if (player_object == null){
+        post_to_console("invalid player object", con_warning);
+        return;
+    }
+    post_to_console("["+player_object.id+"]: " + player_object.name + ", " + player_object.color + ", " + player_object.connection_id, con_debug);
+}
+function CMD_get_seed(garbage){
+    post_to_console("the session seed is: " + seed, con_debug);
+}
+function CMD_get_session_id(garbage){
+    post_to_console("the session id is: " + server_id, con_debug);
+}
+function CMD_clear_chat(garbage){
+    console_textbox.replaceChildren();
+}
+
 
 // ////// //
 // STUFF //
@@ -216,7 +282,17 @@ function parse_player_object_into_simple(player){
 function get_user_object_from_id(user_id){
     for (let j = 0; j < players.length; j++){
         if (players[j].id == user_id) return players[j];
+    return null;
 }}
+function get_user_OBJECTS_from_name(username){
+    let found_players = [];
+    for (let key in players){
+        let current = players[key];
+        if (current.name == username){
+            found_players.push(current);
+    }}
+    return found_players;
+}
 function get_username_of_connection(connection){
     let player = players[connection];
     if (player != null){

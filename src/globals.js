@@ -34,6 +34,8 @@ const SERVER_time_update     = 5;  // { turn_time: action_time: } // updates the
 const SERVER_request_moves   = 6;  // NULL                        // to tell players to send in their moves, 
 const SERVER_sendback_moves  = 7;  // moves                       // sending back the moves that players will recieve
 
+const SERVER_players_ready   = 8;  // count                       // telling players how many are ready
+
 
 // const SERVER_change_seed     = 8;  // undecided on this yet, seems like it would be a performance hit
 
@@ -47,3 +49,7 @@ const CLIENT_test_sqiggle   = 0;  // code             // sent to the server to c
 const CLIENT_joining        = 1;  // {name: color: }  // sent to server to request to join with data
 const CLIENT_submit_moves   = 2;  // moves            // reply to server's request moves message
 const CLIENT_user_message   = 3;  // message          // user sends a message to share with the other players
+const CLIENT_early_submit   = 4;  // moves            // allows user to submit moves early
+const CLIENT_early_retract  = 5;  // NULL             // allows user to revoke their submitted moves, so they can make different moves
+// NOTE: i think we should store recieved actions on the players as individual lists
+// that way if they remove the submission we could easily null it
