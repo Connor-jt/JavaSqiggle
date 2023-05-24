@@ -195,7 +195,7 @@ const committing_attack_actions  = 1;
 const committing_move_actions    = 2;
 const committing_destroy_actions = 3;
 function get_next_action_to_commit(){
-    for (let j = 0; j < actions_to_commit.length(); j++){
+    for (let j = 0; j < actions_to_commit.length; j++){
         if (actions_to_commit[j].type == action_phase){
             let result = actions_to_commit[j];
             actions_to_commit[j].splice(j, 1);
