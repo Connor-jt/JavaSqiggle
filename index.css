@@ -1,5 +1,5 @@
 body{
-    background-color: #111a11;
+    background-color: #350200;
     color: #e5e5e5;
     margin: 0px;
     padding: 0px;
@@ -55,7 +55,7 @@ body{
     display: block; /* Make the buttons appear below each other */
 }
 .menu_items button:hover {
-  background-image: linear-gradient(to right,green, #3b3b3b); /* Green */
+  background-image: linear-gradient(to right,#980000, #3b3b3b); /* Green */
   color: white;
 }
   
