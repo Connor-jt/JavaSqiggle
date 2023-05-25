@@ -4,6 +4,12 @@ body{
     margin: 0px;
     padding: 0px;
 }
+.background_img {
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
 .c_bot{
     position: absolute; 
     width: 100%; 
@@ -26,6 +32,13 @@ body{
     
     -webkit-transform: translate(0%, -50%);
     transform: translate(0%, -50%);
+
+    
+  -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+  -moz-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+  -ms-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+  -o-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+  filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
 }
 
 .menu_items button {
