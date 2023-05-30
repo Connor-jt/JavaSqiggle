@@ -138,6 +138,8 @@ function create_tile(x, y){
     // add new tile and record it to the tile instances
     scene.add(tile_instance);
     instanced_tiles[position_string] = { tile : tile_instance, use_count : 1 };
+    
+    if (queued_discover_units[position_string] != null) return position_string;
 }
 function remove_tile(x, y){
     let position_string =  x +"," + y;
@@ -147,10 +149,13 @@ function remove_tile(x, y){
         if (tile['use_count'] <= 0){
             scene.remove(tile['tile']);
             delete instanced_tiles[position_string];
+            // test whether theres a unit here 
+            if (onscreen_units[position_string] != null) return position_string;
     }}
     else console.log("tile \"" + position_string + "\" does not exist, thus cannot be destroyed");
 }
 function create_tile_circle(x, y, radius){
+    let create_list = [];
     // go through each row of elements
     // elements in row = ((radius*2) + 1) - abs(j)
     for (let row = -radius; row <= radius; row++) {
@@ -158,11 +163,13 @@ function create_tile_circle(x, y, radius){
         let row_left_x = x - (radius - Math.floor(Math.abs(row)/2)) + ((Math.abs(y) % 2) * (Math.abs(row) % 2));
         for (let column = 0; column < items_in_this_row; column++) {
             // figure out if its an off row, if so than add 1
-            create_tile(row_left_x + column, y + row);
-        }
-    }
+            let result = create_tile(row_left_x + column, y + row);
+            if (result != null) create_list.push(result);
+    }}
+    return create_list;
 }
 function delete_tile_circle(x, y, radius){
+    let del_list = [];
     // go through each row of elements
     // elements in row = ((radius*2) + 1) - abs(j)
     for (let row = -radius; row <= radius; row++) {
@@ -170,9 +177,10 @@ function delete_tile_circle(x, y, radius){
         let row_left_x = x - (radius - Math.floor(Math.abs(row)/2)) + ((Math.abs(y) % 2) * (Math.abs(row) % 2));
         for (let column = 0; column < items_in_this_row; column++) {
             // figure out if its an off row, if so than add 1
-            remove_tile(row_left_x + column, y + row);
-        }
-    }
+            let result = remove_tile(row_left_x + column, y + row);
+            if (result != null) del_list.push(result);
+    }}
+    return del_list;
 }
 function preview_moves_at(x, y, outer_radius, inner_radius, visible_units){
     preview_clear_moves();

@@ -2,15 +2,20 @@
 // CLIENT ACTIONS //
 // ///////////// //
 // NOTE: all actions will have the 'player_id' property set upon being recieved by the server
+// and when the action is created/sent by the server, it also given that property
 const blank_action = 0; 
-const move_unit = 1;   // { pos:    unit_id: cleanup_ind:             }
-const attack_unit = 2; // { target: unit_id: cleanup_ind: new_health: } // both are unit_id's, new_health is sent back from the server
-const create_unit = 3; // { pos:    unit:    cleanup_ind:             } 
+const move_unit    = 1; // { pos:    unit_id: cleanup_ind:             }
+const attack_unit  = 2; // { target: unit_id: cleanup_ind: new_health: } // both are unit_id's, new_health is sent back from the server
+const create_unit  = 3; // { pos:    unit:    cleanup_ind:             } // 'unit_id' is passed back in when recieved by the server // 'unit' refers to the type of unit
 
 // original piece not seen - actions // ONLY SENT FROM SERVER
-const create_move_unit = 4;
-const create_attack_unit = 5;
-const destroy_unit = 6; // { unit_id: }
+const create_move_unit   = 4; // { pos: og_pos: unit_type: unit_id:             }
+const create_attack_unit = 5; // { target:      unit_type: unit_id: new_health: }
+const blind_attack_unit  = 6; // { target_pos:  unit_id:                        }
+
+const destroy_unit       = 7; // { unit_id:                                     }
+
+const discover_unit      = 8; // { pos: unit: unit_id:} 
 
 
 const unit_soldier_color = 0x29FF7A;
@@ -33,7 +38,7 @@ const SERVER_new_player      = 4;  // player                      // for when a 
 const SERVER_time_update     = 5;  // { turn_time: action_time: } // updates the time for clients
 const SERVER_request_moves   = 6;  // NULL                        // to tell players to send in their moves, 
 const SERVER_sendback_moves  = 7;  // moves                       // sending back the moves that players will recieve
-
+// unimplemented //
 const SERVER_players_ready   = 8;  // count                       // telling players how many are ready
 
 
@@ -49,6 +54,7 @@ const CLIENT_test_sqiggle   = 0;  // code             // sent to the server to c
 const CLIENT_joining        = 1;  // {name: color: }  // sent to server to request to join with data
 const CLIENT_submit_moves   = 2;  // moves            // reply to server's request moves message
 const CLIENT_user_message   = 3;  // message          // user sends a message to share with the other players
+// unimplemented //
 const CLIENT_early_submit   = 4;  // moves            // allows user to submit moves early
 const CLIENT_early_retract  = 5;  // NULL             // allows user to revoke their submitted moves, so they can make different moves
 // NOTE: i think we should store recieved actions on the players as individual lists

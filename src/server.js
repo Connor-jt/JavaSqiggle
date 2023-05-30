@@ -72,7 +72,7 @@ CMDs_list = {
 function process_cmd(command, params){
     let cmd = CMDs_list[command];
     if (cmd == null) {
-        post_to_console("Command \"" + specific_command + "\" not found, try using \"/help\" for the full list", con_warning);
+        post_to_console("Command \"" + command + "\" not found, try using \"/help\" for the full list", con_warning);
         return;
     }
     cmd.func(params);
@@ -249,8 +249,9 @@ var players = {
         // server managed data
         connection: null, 
         connection_id: null,
-        vis_units: null, // not used on server player
-        vis_tiles: null, // not used on server player 
+        vis_units: {}, // not used on server player
+        vis_tiles: {}, // not used on server player 
+        recieved_moves: null // also not used on ther server player
     }
 };
 UI_addplayer(players["server"].name, players["server"].id, players["server"].color);
@@ -280,10 +281,13 @@ function parse_player_object_into_simple(player){
 // so best idea would be to mkae the array into a dictionary of sorts, wqe ere we just insert the connection id
 // this would allow us to identify each client based on their respective connection
 function get_user_object_from_id(user_id){
-    for (let j = 0; j < players.length; j++){
-        if (players[j].id == user_id) return players[j];
+    for (let j in players){
+        if (players[j].id == user_id){
+            return players[j];
+        }
+    }
     return null;
-}}
+}
 function get_user_OBJECTS_from_name(username){
     let found_players = [];
     for (let key in players){
@@ -333,12 +337,11 @@ server.on("connection", (client) => {
     client.on("data", recieved_data_from_client);
     client.on('error', client_error);
 });
-/* // saving this for later, so we can notify of disconnects etc
-server.on('disconnect', function (id) {
-  var idx = connected.indexOf(id); // only attempt to remove id if it's in the list
-  if (idx !== -1) {connected.splice(idx, 1);}
+ // saving this for later, so we can notify of disconnects etc
+server.on('disconnect', (id) => {
+    post_to_console("Supposed disconnect for id: " + id, con_error);
 });
-*/
+
 function recieved_data_from_client(data){
     let connection = this;
     if (data.type == undefined) {
@@ -364,8 +367,9 @@ function recieved_data_from_client(data){
             connection: connection, 
             connection_id: connection.peer,
             actions_recieved: true, // so if they join mid action collection, they will not foce the game to wait
-            vis_units: null, // not used on server player
-            vis_tiles: null, // not used on server player 
+            vis_units: {}, // not used on server player
+            vis_tiles: {}, // not used on server player 
+            recieved_moves: null
         }
         post_to_console("Client joined: " + get_username_of_connection(connection.peer), con_success);
         // tell everyone that a new player has joined
@@ -416,11 +420,10 @@ function recieved_data_from_client(data){
         let moves_recieved = 0;
         let moves_total = 0;
         for (let p_key in players){
-            if (players[p_key].id >= 0){
-                moves_recieved++;
-                if (players[p_key].actions_recieved == undefined || players[p_key].actions_recieved == true){
-                    moves_total++
-                }
+            if (players[p_key].connection == null) continue; // do not run for server
+            moves_recieved++;
+            if (players[p_key].actions_recieved == undefined || players[p_key].actions_recieved == true){
+                moves_total++
             }
         }
         post_to_console("recieved ["+ data.content.length +"] moves from: " + get_username_of_connection(connection.peer) + ", " + moves_total +'/' + moves_recieved, con_note);
@@ -495,9 +498,9 @@ function request_user_actions(){
     request_clients_moves();
     
     for (let key in players){
-        if (players[key].id >= 0){
-            players[key].actions_recieved = false;
-    }}
+        if (players[key].connection == null) continue; // do not run for server
+        players[key].actions_recieved = false;
+    }
     // we delay this function as a fallback for if players did not recieve the request to submit their actions
     setTimeout(fallback_commit_actions, 2000);
     return;
@@ -521,15 +524,23 @@ function commit_actions()
     // if a unit moves out of range, then request that that user now disregard that unit (delete it from their game instance)
     // if a unit's range changes, then we also need to notify users
 
+    // setup all properties 
+    for (let key in players){
+        if (players[key].connection == null) continue; // do not run for server
+        players[key].recieved_moves = [];
+    }
+
     // do server side processing of the actions to make sure that no sus stuff is happening
     // also fixup the good actions and add them to the list
-    let actions_to_sendback = [];
     let played_units = {}; // use this to keep track of if the users are trying to be cheeky and move pieces that they aren't supposed to
     let destroyed_units = [];
+
+    let created_unit_actions = [];
+
     // ///////////////////////// //
     // PROCESS CREATION ACTIONS //
     // /////////////////////// //
-    for (j = 0; j < all_players_actions.length; j++){
+    for (let j = 0; j < all_players_actions.length; j++){
         if (all_players_actions[j].type != create_unit) continue; 
         // double check that the players aren't glitching it
         if (server_is_anything_in_the_way(all_players_actions[j].pos)){   
@@ -537,39 +548,41 @@ function commit_actions()
             continue;
         }
         // generate new id for this unit, then pass back the info       
-        server_unit = SERVER_CREATE_UNIT(all_players_actions[j].unit, all_players_actions[j].pos, all_players_actions[j].player_id); 
+        let server_unit = SERVER_CREATE_UNIT(all_players_actions[j].unit, all_players_actions[j].pos, all_players_actions[j].player_id); 
         server_units[server_unit.pos[0]+','+server_unit.pos[1]] = server_unit;
-        actions_to_sendback.push({ type: create_unit, unit_id: server_unit.unit_id, unit: server_unit.type, pos: server_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
+        created_unit_actions.push({ type: create_unit, unit_id: server_unit.unit_id, unit: server_unit.type, pos: server_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
+        played_units[server_unit.unit_id] = 1;
     }
     // /////////////////////// //
     // PROCESS ATTACK ACTIONS //
     // ///////////////////// //
-    for (j = 0; j < all_players_actions.length; j++){
-        if (all_players_actions[j].type != attack_unit) continue;
+    for (let j = 0; j < all_players_actions.length; j++){
+        let catt_act = all_players_actions[j];
+        if (catt_act.type != attack_unit) continue;
         // check to see if a move has already been performed with this unit
-        if (played_units[all_players_actions[j].unit_id] != undefined){
-            console.log("[SERVER] unit " + all_players_actions[j].unit_id + " has already made a move this turn");
+        if (played_units[catt_act.unit_id] != undefined){
+            console.log("[SERVER] unit " + catt_act.unit_id + " has already made a move this turn");
             continue;
         }
         // test whether the unit actually exists
-        let moved_unit = get_server_unit_by_id(all_players_actions[j].unit_id);
+        let moved_unit = get_server_unit_by_id(catt_act.unit_id);
         if (moved_unit == null){
             console.log("[SERVER] player attempted to move non-existing unit, not allowed")
             continue;
         }
         // test whether the target exists
-        let target_unit = get_server_unit_by_id(all_players_actions[j].target);
+        let target_unit = get_server_unit_by_id(catt_act.target);
         if (target_unit == null){
             console.log("[SERVER] player attempted to attack non-existing unit, not allowed")
             continue;
         }
         // test whether the player actually owns this unit
-        if (moved_unit.owner != all_players_actions[j].player_id){
+        if (moved_unit.owner != catt_act.player_id){
             console.log("[SERVER] player attempted to move unit they dont own")
             continue;
         }
         // and then test whether the player DOES NOT own the target
-        if (target_unit.owner == all_players_actions[j].player_id){
+        if (target_unit.owner == catt_act.player_id){
             console.log("[SERVER] player attempted to attack unit that they own")
             continue;
         }
@@ -581,63 +594,212 @@ function commit_actions()
         if (target_unit.defense <= 0){ // target was killed
             destroyed_units.push(target_unit);
         }
+        played_units[moved_unit.unit_id] = 1;
         // send back the action
-        actions_to_sendback.push({ type: attack_unit, unit_id: all_players_actions[j].unit_id, target_unit: all_players_actions[j].target, new_health: target_unit.defense, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
+        
+        
+        // can see the attacker and target, regular attack
+        // can see the attacker but not target, we need to do a diff attack
+        // can see target but not attacker, do a create attack
+        let attacker_key = moved_unit.pos[0] + ','+ moved_unit.pos[1];
+        let target_key = target_unit.pos[0] + ','+ target_unit.pos[1];
+        for (let j in players){
+            let curr_player = players[j];
+            if (curr_player.connection == null) continue; // do not run for server
+            let sees_attacker = curr_player.vis_units[attacker_key] != null;
+            let sees_target = curr_player.vis_units[target_key] != null;
+            if (sees_attacker && sees_target){
+                curr_player.recieved_moves.push({ type: attack_unit, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
+            }
+            else if (sees_attacker){
+                curr_player.recieved_moves.push({ type: blind_attack_unit, unit_id: moved_unit.unit_id, target_pos: target_unit.pos, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
+            }
+            else if (sees_target){
+                curr_player.recieved_moves.push({ type: create_attack_unit, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
+            }
+            // else they dont see anything occur
+        }
     }
+    // we want something in here to prevetn units from moving if thye have infact been destroyed first
+    // or else that might confuse players when they attack a piece and it retreats in the same turn
+    // resulting in it looking like the piece did not die but it would have actually died, hjust it escaped bewforew it did
     // ///////////////////////// //
     // PROCESS MOVEMENT ACTIONS //
     // /////////////////////// //
-    for (j = 0; j < all_players_actions.length; j++){
-        if (all_players_actions[j].type != move_unit) continue;
+    for (let j = 0; j < all_players_actions.length; j++){
+        let cmov_act = all_players_actions[j];
+        if (cmov_act.type != move_unit) continue;
         // check to see if a move has already been performed with this unit
-        if (played_units[all_players_actions[j].unit_id] != undefined){
-            console.log("[SERVER] unit " + all_players_actions[j].unit_id + " has already made a move this turn");
+        if (played_units[cmov_act.unit_id] != undefined){
+            console.log("[SERVER] unit " + cmov_act.unit_id + " has already made a move this turn");
             continue;
         }
         // we need to confirm that there are no objects in the way of this movement
-        if (server_is_anything_in_the_way(all_players_actions[j].pos)){
+        if (server_is_anything_in_the_way(cmov_act.pos)){
             console.log("[SERVER] player attempted to move unit to the location of another unit, not allowed")
             continue;
         }
         // test whether the unit actually exists
-        let moved_unit = get_server_unit_by_id(all_players_actions[j].unit_id);
+        let moved_unit = get_server_unit_by_id(cmov_act.unit_id);
         if (moved_unit == null){
             console.log("[SERVER] player attempted to move non-existing unit, not allowed")
             continue;
         }
         // test whether the player actually owns this unit
-        if (moved_unit.owner != all_players_actions[j].player_id){
+        if (moved_unit.owner != cmov_act.player_id){
             console.log("[SERVER] player attempted to move unit they dont own")
             continue;
         }
         // lastly we need to check if the movement is actually in range AKA VALID
 
         // update the dictionary to contain the new location of this moved unit
-        delete server_units[moved_unit.pos[0] + ',' + moved_unit.pos[1]];
-        server_units[all_players_actions[j].pos[0] + ',' + all_players_actions[j].pos[1]] = moved_unit;
-        moved_unit.pos = all_players_actions[j].pos;
+        let curr_unit_key = moved_unit.pos[0] + ',' + moved_unit.pos[1];
+        let new_unit_key = cmov_act.pos[0] + ',' + cmov_act.pos[1];
+        let og_pos = moved_unit.pos.slice(0);
+
+        delete server_units[curr_unit_key];
+        server_units[new_unit_key] = moved_unit;
+        moved_unit.pos = cmov_act.pos;
         // submit the verified information back to clients
-        actions_to_sendback.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
         played_units[moved_unit.unit_id] = 1;
+
+        // for each player
+        for (let j in players){
+            let curr_player = players[j];
+            if (curr_player.connection == null) continue; // do not run for server
+            
+            let sees_unit = curr_player.vis_units[curr_unit_key] != null;
+            let sees_new_pos = curr_player.vis_tiles[new_unit_key] != null;
+            // owner gets free pass to push 
+            if (curr_player.id == moved_unit.owner){
+                curr_player.recieved_moves.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, cleanup_ind: cmov_act.cleanup_ind, player_id: cmov_act.player_id });
+                delete curr_player.vis_units[curr_unit_key];
+                curr_player.vis_units[new_unit_key] = 1;
+                player_see_area(curr_player, moved_unit.pos[0], moved_unit.pos[1], moved_unit.vision_range);
+                player_stop_seeing_area(curr_player, og_pos[0], og_pos[1], moved_unit.vision_range);
+            }
+            // if they can see this unit, pushback unit move
+            else if (sees_unit){ // we dont need to see the final position, because the client will themselves figure out if the piece should lose visibility or not
+                curr_player.recieved_moves.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, cleanup_ind: cmov_act.cleanup_ind, player_id: cmov_act.player_id });
+                delete curr_player.vis_units[curr_unit_key];
+                if (sees_new_pos){
+                    curr_player.vis_units[new_unit_key] = 1;
+                }
+            }
+            // if they can see the tile that they move to, pushback moveto_create
+            else if (sees_new_pos){
+                curr_player.recieved_moves.push({ type: create_move_unit, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, og_pos: og_pos, pos: moved_unit.pos, cleanup_ind: cmov_act.cleanup_ind, player_id: cmov_act.player_id });
+                curr_player.vis_units[new_unit_key] = 1;
+            }
+            // else they dont see it before/after, so nothing happens
+        }
     }
 
     // //////////////////////// //
     // PROCESS DESTROYED UNITS //
     // ////////////////////// //
     for (let j = 0; j < destroyed_units.length; j++){
-        actions_to_sendback.push({ type: destroy_unit, unit_id: destroyed_units[j].unit_id });
         // then delete the unit from the match
         let destroyed_unit_key = get_server_unit_KEY_by_id(destroyed_units[j].unit_id);
+        for (let key in players){
+            let curr_player = players[key];
+            if (curr_player.connection == null) continue; // do not run for server
+            // clear sight for owner
+            if (curr_player.id == server_units[destroyed_unit_key].owner){
+                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: destroyed_units[j].unit_id });
+                player_stop_seeing_area(curr_player, server_units[destroyed_unit_key].pos[0], server_units[destroyed_unit_key].pos[1], server_units[destroyed_unit_key].vision_range);
+                delete curr_player.vis_units[destroyed_unit_key];
+            }
+            // else clear the unit from seen units
+            else if (curr_player.vis_units[destroyed_unit_key] != null){
+                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: destroyed_units[j].unit_id });
+                delete curr_player.vis_units[destroyed_unit_key];
+            }
+        }
         // i feel like theres more references that we need to scrub when doing this
         delete server_units[destroyed_unit_key];
     }
 
-    post_to_console("Action phase over, recieved [" + all_players_actions.length + "] actions, [" + actions_to_sendback.length + "] were sent", con_debug);
-    submit_moves_to_client(actions_to_sendback);
+    // ////////////////////////////// //
+    // REPROCESS THE CREATION EVENTS //
+    // //////////////////////////// //
+    for (let j = 0; j < created_unit_actions.length; j++){
+        // we also need to process this for other players, so maybe we will have to make the creation event actually visally occur after teh move and attack events,
+        // but it will still have priority over the ther two events in terms of taking that position
+        let new_unit_action = created_unit_actions[j];
+
+        let creator = get_user_object_from_id(new_unit_action.player_id);
+        if (creator == null){
+            post_to_console("creation event has no owner", con_warning);
+            continue;
+        }
+        let unit = get_server_unit_by_id(new_unit_action.unit_id);
+        // add the unit to their list of units that they can see
+        // the function will handle the terrain stuff, and spottingf units on the new tiles
+        let unit_key = unit.pos[0] + ','+ unit.pos[1];
+        creator.vis_units[unit_key] = 1;
+        player_see_area(creator, unit.pos[0], unit.pos[1], unit.vision_range);
+        // we automatically push this for the owner
+        creator.recieved_moves.push(new_unit_action);
+
+        for (let j in players){
+            let curr_player = players[j];
+            if (curr_player.connection == null) continue; // do not run for server
+            if (curr_player != creator && curr_player.vis_tiles[new_unit_key] != null){
+                curr_player.push({ type: create_unit, unit_id: server_unit.unit_id, unit: server_unit.type, pos: server_unit.pos, cleanup_ind: new_unit_action.cleanup_ind, player_id: new_unit_action.player_id });
+                curr_player.vis_units[unit_key] = 1;
+            }
+        }
+    }
+
+
+    post_to_console("Action phase over, recieved [" + all_players_actions.length + "] actions", con_debug);
+    submit_moves_to_client();
     // second submit a list of actions back that the client should see
     // this is how we'll beable to thin down what each client actually gets sent
     all_players_actions = [];
 }
+// functions to manage what each player actually sees
+function player_see_area(player_object, x, y, radius){
+    // test if the aareaa is not seen yet, if we cannot see it, check it for any units
+    // if we can see any units here, thne add create unit events for this player
+    // we would have to run this after the fact of the other events being run or else we could get some weird stuff 
+    for (let row = -radius; row <= radius; row++) {
+        let items_in_this_row = ((radius*2) + 1) - Math.abs(row);
+        let row_left_x = x - (radius - Math.floor(Math.abs(row)/2)) + ((Math.abs(y) % 2) * (Math.abs(row) % 2));
+        for (let column = 0; column < items_in_this_row; column++) {
+            // test if this tile exists
+            let tile_key = (row_left_x + column) + ',' + (y + row);
+            if (player_object.vis_tiles[tile_key] == null){
+                player_object.vis_tiles[tile_key] = 1;
+                // now we need to let the player know if something exists here or not
+                if (server_units[tile_key] != null){
+                    player_object.vis_units[tile_key] = server_units[tile_key];
+                    player_object.recieved_moves.push({ type: discover_unit, unit_id: server_units[tile_key].unit_id, unit: server_units[tile_key].type, pos: server_units[tile_key].pos, player_id: server_units[tile_key].owner });
+            }}else{
+                player_object.vis_tiles[tile_key] += 1;
+}}}}
+function player_stop_seeing_area(player_object, x, y, radius){
+    // none of ther events inside this funcetion ned to be telegraphed to the players
+    // as we will be locally handling that, and assuming that the data between client and server stay in sync
+    for (let row = -radius; row <= radius; row++) {
+        let items_in_this_row = ((radius*2) + 1) - Math.abs(row);
+        let row_left_x = x - (radius - Math.floor(Math.abs(row)/2)) + ((Math.abs(y) % 2) * (Math.abs(row) % 2));
+        for (let column = 0; column < items_in_this_row; column++) {
+            // test if this tile exists
+            let tile_key = (row_left_x + column) + ',' + (y + row);
+            if (player_object.vis_tiles[tile_key] != null){
+                player_object.vis_tiles[tile_key] -= 1;
+                // test whether this was the last reference to this tile
+                if (player_object.vis_tiles[tile_key] <= 0){
+                    delete player_object.vis_tiles[tile_key];
+                    // then delete any unit on that tile
+                    if (player_object.vis_units[tile_key] != null){
+                        delete player_object.vis_units[tile_key];
+}}}}}}
+
+
+
 function server_is_anything_in_the_way(pos_array){
     let str_position = pos_array[0]+','+pos_array[1];
     return (server_units[str_position] != null);
@@ -701,8 +863,12 @@ function time_update(current, attack){
 function request_clients_moves(){
     broadcast_to_all_players(SERVER_request_moves);
 }
-function submit_moves_to_client(actions_to_sendback){
-    broadcast_to_all_players(SERVER_sendback_moves, actions_to_sendback);
+// this now submits each player's queues to ONLY themselves, we aren't pooling all actions to all players
+function submit_moves_to_client(){
+    for (let key in players){
+        if (players[key].connection != null){ // check to make sure this isn't the server
+            players[key].connection.send({type:SERVER_sendback_moves, content:players[key].recieved_moves});
+    }}
 }
 
 // ///////////////////////////////// //

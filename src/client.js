@@ -15,6 +15,15 @@
 
 
 
+
+// TODO LATER
+
+
+// need some stuff for handling when a unit either moves into our view
+// or when a unit attacks into our view and then fades back out of it
+// i imagine that will not be the eaisest to make apparent
+// as the attack animations are already rather quick
+
 // ///////////////////// //
 // INITIALIZATION LOGIC //
 // /////////////////// //
@@ -31,6 +40,10 @@ var action_text = document.getElementById("action_indicator");
 var messagebox_text = document.getElementById("client_message_field");
 
 function initialize(map_seed){
+    // clear the background image so we can see the 3d renderer
+    var background_image = document.getElementById("spash_screen_image");
+    background_image.parentNode.removeChild(background_image);
+
     let seed_gen = get_rand_func(map_seed);
     let seed_gen2 = get_rand_func('_' + map_seed); // THIS WILL be removed, and fixed at a later date
 
@@ -87,6 +100,7 @@ function initialize(map_seed){
 // ///////////////// //
 var currently_selected_unit = null;
 var onscreen_units = {};
+var queued_discover_units = {};
 function get_client_unit_by_id(unit_id){
     for (let unit in onscreen_units){
         if (onscreen_units[unit].unit_id == unit_id) return onscreen_units[unit];
@@ -111,11 +125,29 @@ function does_unit_exist_at(x, y){
     return (unit != null);
 }
 function unit_see(unit, last_position){
+    // return a list of units to create, typically it will be none
+    let units_to_create = create_tile_circle(unit.pos[0],unit.pos[1], unit.vision_range);
+    for (let j = 0; j < units_to_create; j++){
+        let unit_coord_str = units_to_create[j];
+        let discover_action = queued_discover_units[unit_coord_str];
+        if (discover_action != null){
+            delete queued_discover_units[unit_coord_str]; // clear this one out, as we've just spawned it in
+            create_piece_at_and_wrap(discover_action.unit, discover_action.unit_id, discover_action.pos, discover_action.player_id);
+        }else{
+            console.log("tried to discover unit that couldn't be found");
+    }}
+    // this is used to clear tiles that were previously seen, if not done correctly this tiles will still be there if no units have vision here
     if (last_position != null){
         // clear the assigned terrain pieces at the last location
-        delete_tile_circle(last_position[0],last_position[1], unit.vision_range);
-    }
-    create_tile_circle(unit.pos[0],unit.pos[1], unit.vision_range);
+        // return list of units to delete
+        let units_to_del = delete_tile_circle(last_position[0],last_position[1], unit.vision_range);
+        for (let j = 0; j < units_to_del; j++){
+            let unit_object = onscreen_units[units_to_del[j]];
+            if (unit_object != null){
+                delete_unit(unit_object);
+            }else{
+                console.log("instructed to delete unit that does not exist");
+    }}}
     move_camera_to_coords(unit.pos);
 }
 function select_unit(selec_unit){
@@ -184,30 +216,50 @@ function commit_next_action(){
     if (actions_to_commit == undefined) return;
     let next_action = get_next_action_to_commit();
     if (next_action == null) disable_action_mode(); // if null, then there are no more actions to process
-    else if (next_action.type == create_unit)   create_piece(next_action);
-    else if (next_action.type == move_unit)     move_piece(next_action);
-    else if (next_action.type == attack_unit)   attack_piece(next_action);
-    else if (next_action.type == destroy_unit)  action_destroy_piece(next_action);
+    else if (next_action.type == create_unit)       create_piece(next_action);
+    else if (next_action.type == move_unit)         move_piece(next_action);
+    else if (next_action.type == create_move_unit)  move_piece(next_action);
+    else if (next_action.type == attack_unit)       attack_piece(next_action);
+    else if (next_action.type == create_attack_unit)attack_piece(next_action);
+    else if (next_action.type == blind_attack_unit) attack_piece(next_action);
+    else if (next_action.type == destroy_unit)      action_destroy_piece(next_action);
 }
 var action_phase = 0;
-const committing_create_actions  = 0;
-const committing_attack_actions  = 1;
-const committing_move_actions    = 2;
+const committing_attack_actions  = 0;
+const committing_move_actions    = 1;
+const committing_create_actions  = 2;
 const committing_destroy_actions = 3;
 function get_next_action_to_commit(){
+    // attack block 
+    if (action_phase == committing_attack_actions){
+        for (let j = 0; j < actions_to_commit.length; j++){
+            if (actions_to_commit[j].type == attack_unit || actions_to_commit[j].type == create_attack_unit || actions_to_commit[j].type == blind_attack_unit){
+                return load_action(j);
+    }} action_phase = committing_move_actions; }
+    // move block
+    if (action_phase == committing_move_actions){
+        for (let j = 0; j < actions_to_commit.length; j++){
+            if (actions_to_commit[j].type == move_unit || actions_to_commit[j].type == create_move_unit){
+                return load_action(j);
+    }} action_phase = committing_create_actions; }
+    // create block
+    if (action_phase == committing_create_actions){
+        for (let j = 0; j < actions_to_commit.length; j++){
+            if (actions_to_commit[j].type == create_unit ){
+                return load_action(j);
+    }} action_phase = committing_destroy_actions; }
+    // destroy block
     for (let j = 0; j < actions_to_commit.length; j++){
-        if (actions_to_commit[j].type == action_phase){
-            let result = actions_to_commit[j];
-            actions_to_commit[j].splice(j, 1);
-            return result;
-        }
-    } 
-    action_phase++;
-    if (action_phase > committing_destroy_actions){
-        return null; // no more actions to commit
-    }
-    // rerun the function so we process the next    
-    return get_next_action_to_commit();
+        if (actions_to_commit[j].type == destroy_unit ){
+            return load_action(j);
+    }}
+    // else return blank and cancel action mode, as theres no more actions to process
+    return null;
+}
+function load_action(j){
+    let result = actions_to_commit[j];
+    actions_to_commit.splice(j, 1);
+    return result;
 }
 
 function progress_current_action(){
@@ -218,26 +270,36 @@ function progress_current_action(){
 }
 function move_piece(action){
     // we could probably do this after the piece moves, that would probably look nicer
-    
-    let target_unit = get_client_unit_by_id(action.unit_id);
-    if (target_unit == null){
-        console.log("[CLIENT] recieved move instruction for unit_id that has no matching unit");
-        return;
+    let target_unit;
+    if (action.type == move_unit){
+        target_unit = get_client_unit_by_id(action.unit_id);
+        if (target_unit == null){
+            console.log("[CLIENT] recieved move instruction for unit_id that has no matching unit");
+            return;
+        }   
+        delete onscreen_units[target_unit.pos[0]+","+target_unit.pos[1]];
+    }
+    else{ // 'create_move_unit'
+        target_unit = create_piece_at(action.unit, action.unit_id, action.og_pos, action.player_id);
     }
 
-    let old_position_str = target_unit.pos[0]+","+target_unit.pos[1];
     let old_pos = [target_unit.pos[0], target_unit.pos[1]];
     // update the position on this unit
-    delete onscreen_units[old_position_str];
+
     onscreen_units[action.pos[0] + ',' + action.pos[1]] = target_unit;
     target_unit.pos = action.pos;
-    // render the new area for this piece
-    unit_see(target_unit, old_pos);
+    let new_position_str = target_unit.pos[0]+","+target_unit.pos[1];
+
+    if (target_unit.owner == our_playerid){
+        // render the new area for this piece
+        unit_see(target_unit, old_pos);
+    }
 
     // now log all the data so we can animate
     // get the final destination real world position
     let pos_off = get_location_offset(target_unit.pos[0], target_unit.pos[1]);
-    let action_tile_height = find_visual_hieght_at(old_position_str, pos_off[0], pos_off[1]);
+    let action_tile_height = find_visual_hieght_at(new_position_str, pos_off[0], pos_off[1]);
+    
     let dest_pos = new THREE.Vector3(pos_off[0], action_tile_height, pos_off[1]);
     let difference = dest_pos.clone().sub(target_unit.mesh.position);
     current_action = { type: move_unit, unit: target_unit, 
@@ -409,7 +471,10 @@ function PROGRESS_create_piece(){
 }
 
 function action_destroy_piece(action){
-    let target_unit = get_client_unit_by_id(action.unit_id);
+    delete_unit(get_client_unit_by_id(action.unit_id));
+    current_action = null;
+}
+function delete_unit(target_unit){
     // clear the model from the scene
     scene.remove(target_unit.mesh);
     // clear the visible tiles owned by the unit
@@ -417,7 +482,23 @@ function action_destroy_piece(action){
     // remove the piece from the unit list
     let target_unit_key = get_client_unit_KEY_by_id(action.unit_id);
     delete onscreen_units[target_unit_key];
-    current_action = null;
+
+}
+// currently do not need to return anything from this function, as it just instaniates the unit into the game
+function create_piece_at_and_wrap(type, unit_id, coords, owner_id){
+    let created_unit = create_piece_at(type, unit_id, coords, owner_id);
+    onscreen_units[created_unit.pos[0] + ',' + created_unit.pos[1]] = created_unit;
+}
+function create_piece_at(type, unit_id, coords, owner_id){
+    let created_unit = CLIENT_CREATE_UNIT(type, unit_id, coords, return_player_from_id(owner_id));
+    // add it to the scene and adjust position to match the set position
+    scene.add(created_unit.mesh);
+
+    let pos__off = get_location_offset(created_unit.pos[0], created_unit.pos[1]);
+    let position = created_unit.pos[0]+","+created_unit.pos[1];
+    let action__tile_height = find_visual_hieght_at(position, pos__off[0], pos__off[1]);
+    created_unit.mesh.position = new THREE.Vector3(pos__off[0], action__tile_height, pos__off[1]);
+    return created_unit;
 }
 
 
@@ -865,9 +946,6 @@ function return_player_from_id(target_id){
     }
     return null;
 }
-function initialize_player_colors(player){
-
-}
 
 var chatbox_field_text = document.getElementById("chatbox_field");
 function recieved_packet_from_server(data){
@@ -930,6 +1008,18 @@ function recieved_packet_from_server(data){
         has_recieved_actions = true;
         // call that function  whatever it is
         actions_to_commit = data.content;
+        // now pre process some of those actions
+        // aka, load in all the discover actions
+        // as well as remove them from the queue entirely, so we dont go crazy figuring out why we skip some actions occasionally
+        for (let j = 0; j < actions_to_commit.length; j++){
+            let curr_Action = actions_to_commit[j];
+            if (curr_Action.type == discover_unit){
+                queued_discover_units[curr_Action.pos[0] + ',' + curr_Action.pos[1]] = curr_Action;
+                actions_to_commit.splice(j, 1);
+                j--; // make sure we account for the index that we just lost
+            }
+        }
+        
     }
     else{
         console.log("recieved invalid packet type: " + data.type); 
