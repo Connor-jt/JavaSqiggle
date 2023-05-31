@@ -110,7 +110,7 @@ function find_visual_hieght_at(x_y_coord, real_x, real_y){
 var instanced_tiles = {}; // create an empty array for the tiles
 var movement_visual_tiles = {}; // this is for moving units, it will preview the moves that you can make
 var range_visual_tiles = {}; // this is for attacking units at range, ideally only ranged units will use this 
-function create_tile(x, y){
+function create_tile(x, y, discover_list){
     // check that the tile doesn't already exist, if it does skip creation
     let position_string =  x + "," + y;
     let tile = instanced_tiles[position_string];
@@ -139,9 +139,9 @@ function create_tile(x, y){
     scene.add(tile_instance);
     instanced_tiles[position_string] = { tile : tile_instance, use_count : 1 };
     
-    if (queued_discover_units[position_string] != null) return position_string;
+    if (discover_list[position_string] != null) return position_string;
 }
-function remove_tile(x, y){
+function remove_tile(x, y, delete_list){
     let position_string =  x +"," + y;
     let tile = instanced_tiles[position_string];
     if (tile != null){
@@ -150,11 +150,11 @@ function remove_tile(x, y){
             scene.remove(tile['tile']);
             delete instanced_tiles[position_string];
             // test whether theres a unit here 
-            if (onscreen_units[position_string] != null) return position_string;
+            if (delete_list[position_string] != null) return position_string;
     }}
     else console.log("tile \"" + position_string + "\" does not exist, thus cannot be destroyed");
 }
-function create_tile_circle(x, y, radius){
+function create_tile_circle(x, y, radius, discover_list){
     let create_list = [];
     // go through each row of elements
     // elements in row = ((radius*2) + 1) - abs(j)
@@ -163,12 +163,13 @@ function create_tile_circle(x, y, radius){
         let row_left_x = x - (radius - Math.floor(Math.abs(row)/2)) + ((Math.abs(y) % 2) * (Math.abs(row) % 2));
         for (let column = 0; column < items_in_this_row; column++) {
             // figure out if its an off row, if so than add 1
-            let result = create_tile(row_left_x + column, y + row);
-            if (result != null) create_list.push(result);
+            let result = create_tile(row_left_x + column, y + row, discover_list);
+            if (result != null) 
+            create_list.push(result);
     }}
     return create_list;
 }
-function delete_tile_circle(x, y, radius){
+function delete_tile_circle(x, y, radius, delete_list){
     let del_list = [];
     // go through each row of elements
     // elements in row = ((radius*2) + 1) - abs(j)
@@ -177,8 +178,9 @@ function delete_tile_circle(x, y, radius){
         let row_left_x = x - (radius - Math.floor(Math.abs(row)/2)) + ((Math.abs(y) % 2) * (Math.abs(row) % 2));
         for (let column = 0; column < items_in_this_row; column++) {
             // figure out if its an off row, if so than add 1
-            let result = remove_tile(row_left_x + column, y + row);
-            if (result != null) del_list.push(result);
+            let result = remove_tile(row_left_x + column, y + row, delete_list);
+            if (result != null) 
+            del_list.push(result);
     }}
     return del_list;
 }

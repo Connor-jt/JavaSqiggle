@@ -306,6 +306,7 @@ function get_username_of_connection(connection){
 }
 
 var server_units = {};
+var queued_creates = {};
 
 // ///////////// //
 // SERVER SETUP //
@@ -427,11 +428,12 @@ function recieved_data_from_client(data){
             }
         }
         post_to_console("recieved ["+ data.content.length +"] moves from: " + get_username_of_connection(connection.peer) + ", " + moves_total +'/' + moves_recieved, con_note);
-
-        if (moves_recieved == moves_total){
-            // if we didn't return, then we all players have submitted
-            commit_actions();
-        }
+        // TODO: uncomment this
+        // leaving this commented as since all communications are instant, we dont get to see the action phase occur if all users submit no moves
+        // if (moves_recieved == moves_total){
+        //     // if we didn't return, then we all players have submitted
+        //     commit_actions();
+        // }
     }
     else{
         post_to_console("recieved invalid packet type from: " + get_username_of_connection(connection.peer) + ": " + data.type, con_warning);
@@ -540,18 +542,19 @@ function commit_actions()
     // ///////////////////////// //
     // PROCESS CREATION ACTIONS //
     // /////////////////////// //
+    // TODO: get rid of all this garbage, we DO NOT need to do all that just yet
     for (let j = 0; j < all_players_actions.length; j++){
         if (all_players_actions[j].type != create_unit) continue; 
         // double check that the players aren't glitching it
         if (server_is_anything_in_the_way(all_players_actions[j].pos)){   
             console.log("[SERVER] player attempted to create unit at the position of another unit, not allowed");
             continue;
-        }
-        // generate new id for this unit, then pass back the info       
-        let server_unit = SERVER_CREATE_UNIT(all_players_actions[j].unit, all_players_actions[j].pos, all_players_actions[j].player_id); 
-        server_units[server_unit.pos[0]+','+server_unit.pos[1]] = server_unit;
-        created_unit_actions.push({ type: create_unit, unit_id: server_unit.unit_id, unit: server_unit.type, pos: server_unit.pos, cleanup_ind: all_players_actions[j].cleanup_ind, player_id: all_players_actions[j].player_id });
-        played_units[server_unit.unit_id] = 1;
+        }     
+        // do not assign server unit just yet, as that will allow players to spot the unit before it spawns
+        //server_units[server_unit.pos[0]+','+server_unit.pos[1]] = server_unit;
+        // however we need a new list of units, to make sure that spawning takes priority over other actions
+        queued_creates[all_players_actions[j].pos[0]+','+all_players_actions[j].pos[1]] = 1;
+        created_unit_actions.push(all_players_actions[j]);
     }
     // /////////////////////// //
     // PROCESS ATTACK ACTIONS //
@@ -615,7 +618,7 @@ function commit_actions()
                 curr_player.recieved_moves.push({ type: blind_attack_unit, unit_id: moved_unit.unit_id, target_pos: target_unit.pos, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
             }
             else if (sees_target){
-                curr_player.recieved_moves.push({ type: create_attack_unit, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: create_attack_unit, pos:moved_unit.pos, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
             }
             // else they dont see anything occur
         }
@@ -662,7 +665,6 @@ function commit_actions()
         moved_unit.pos = cmov_act.pos;
         // submit the verified information back to clients
         played_units[moved_unit.unit_id] = 1;
-
         // for each player
         for (let j in players){
             let curr_player = players[j];
@@ -726,30 +728,38 @@ function commit_actions()
     for (let j = 0; j < created_unit_actions.length; j++){
         // we also need to process this for other players, so maybe we will have to make the creation event actually visally occur after teh move and attack events,
         // but it will still have priority over the ther two events in terms of taking that position
-        let new_unit_action = created_unit_actions[j];
-
-        let creator = get_user_object_from_id(new_unit_action.player_id);
-        if (creator == null){
+        let creat_acto = created_unit_actions[j];
+        let ccreator = get_user_object_from_id(creat_acto.player_id);
+        if (ccreator == null){
             post_to_console("creation event has no owner", con_warning);
             continue;
         }
-        let unit = get_server_unit_by_id(new_unit_action.unit_id);
+
+        let unit = SERVER_CREATE_UNIT(creat_acto.unit, creat_acto.pos, creat_acto.player_id); 
+        
+        let new_unit_action = { type: create_unit, unit_id: unit.unit_id, unit: unit.type, pos: unit.pos, cleanup_ind: creat_acto.cleanup_ind, player_id: creat_acto.player_id };
+        played_units[unit.unit_id] = 1;
+        server_units[unit.pos[0]+','+unit.pos[1]] = unit;
+
         // add the unit to their list of units that they can see
         // the function will handle the terrain stuff, and spottingf units on the new tiles
         let unit_key = unit.pos[0] + ','+ unit.pos[1];
-        creator.vis_units[unit_key] = 1;
-        player_see_area(creator, unit.pos[0], unit.pos[1], unit.vision_range);
+        ccreator.vis_units[unit_key] = 1;
+        player_see_area(ccreator, unit.pos[0], unit.pos[1], unit.vision_range);
         // we automatically push this for the owner
-        creator.recieved_moves.push(new_unit_action);
+        ccreator.recieved_moves.push(new_unit_action);
 
-        for (let j in players){
-            let curr_player = players[j];
+        for (let jj in players){
+            let curr_player = players[jj];
             if (curr_player.connection == null) continue; // do not run for server
-            if (curr_player != creator && curr_player.vis_tiles[new_unit_key] != null){
-                curr_player.push({ type: create_unit, unit_id: server_unit.unit_id, unit: server_unit.type, pos: server_unit.pos, cleanup_ind: new_unit_action.cleanup_ind, player_id: new_unit_action.player_id });
-                curr_player.vis_units[unit_key] = 1;
-            }
-        }
+            if (curr_player != ccreator && curr_player.vis_tiles[unit_key] != null){
+                if (curr_player.vis_units[unit_key] != null){
+                    console.log("server is trying to tell client to create unit that they already see")
+                }else{
+                    curr_player.recieved_moves.push({ type: create_unit, unit_id: unit.unit_id, unit: unit.type, pos: unit.pos, cleanup_ind: new_unit_action.cleanup_ind, player_id: new_unit_action.player_id });
+                    curr_player.vis_units[unit_key] = 1;
+                }
+        }}
     }
 
 
@@ -758,9 +768,10 @@ function commit_actions()
     // second submit a list of actions back that the client should see
     // this is how we'll beable to thin down what each client actually gets sent
     all_players_actions = [];
+    queued_creates = {}; // clear queue
 }
 // functions to manage what each player actually sees
-function player_see_area(player_object, x, y, radius){
+function player_see_area(pplayer_object, x, y, radius){
     // test if the aareaa is not seen yet, if we cannot see it, check it for any units
     // if we can see any units here, thne add create unit events for this player
     // we would have to run this after the fact of the other events being run or else we could get some weird stuff 
@@ -770,14 +781,18 @@ function player_see_area(player_object, x, y, radius){
         for (let column = 0; column < items_in_this_row; column++) {
             // test if this tile exists
             let tile_key = (row_left_x + column) + ',' + (y + row);
-            if (player_object.vis_tiles[tile_key] == null){
-                player_object.vis_tiles[tile_key] = 1;
+            if (pplayer_object.vis_tiles[tile_key] == null){
+                pplayer_object.vis_tiles[tile_key] = 1;
                 // now we need to let the player know if something exists here or not
-                if (server_units[tile_key] != null){
-                    player_object.vis_units[tile_key] = server_units[tile_key];
-                    player_object.recieved_moves.push({ type: discover_unit, unit_id: server_units[tile_key].unit_id, unit: server_units[tile_key].type, pos: server_units[tile_key].pos, player_id: server_units[tile_key].owner });
-            }}else{
-                player_object.vis_tiles[tile_key] += 1;
+                // do not mark unit as visible unless its definitely not our own
+                if (server_units[tile_key] != null && server_units[tile_key].owner != pplayer_object.id){
+                    if (pplayer_object.vis_units[tile_key] != null){
+                        console.log("a unit is already seen at: " + tile_key);
+                    }else{
+                        pplayer_object.vis_units[tile_key] = 1;
+                        pplayer_object.recieved_moves.push({ type: discover_unit, unit_id: server_units[tile_key].unit_id, unit: server_units[tile_key].type, pos: server_units[tile_key].pos, player_id: server_units[tile_key].owner });
+            }}}else{
+                pplayer_object.vis_tiles[tile_key] += 1;
 }}}}
 function player_stop_seeing_area(player_object, x, y, radius){
     // none of ther events inside this funcetion ned to be telegraphed to the players
@@ -802,6 +817,7 @@ function player_stop_seeing_area(player_object, x, y, radius){
 
 function server_is_anything_in_the_way(pos_array){
     let str_position = pos_array[0]+','+pos_array[1];
+    if (queued_creates[str_position] != null){ return true; }
     return (server_units[str_position] != null);
 }
 function get_server_unit_by_id(unit_id){
