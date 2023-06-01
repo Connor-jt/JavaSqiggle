@@ -413,16 +413,17 @@ function create_attack_piece(action){
 // THIS ONE IS NOT DONE YET !!!!!!!!!!!!!
 function blind_attack_piece(action){
     let attacker_unit = get_client_unit_by_id(action.unit_id);
-    let target_unit = get_client_unit_by_id(action.target_unit);
-
-    if (attacker_unit == null || target_unit == null){
+    if (attacker_unit == null){
         console.log("[CLIENT] recieved instruction to attack piece that does not exist");
         return;
     }
 
-    let dest = calculate_realworld_position_of(target_unit);
+    // caclulate postion of not seen target unit
+    let pos_off = get_location_offset(action.pos[0], action.pos[1]);
+    let dest = new THREE.Vector3(pos_off[0], find_visual_hieght_at(action.pos[0]+","+action.pos[1], pos_off[0], pos_off[1]), pos_off[1]);
+
     let origin = calculate_realworld_position_of(attacker_unit);
-    current_action = { type: attack_unit, unit: attacker_unit, target: target_unit,
+    current_action = { type: attack_unit, unit: attacker_unit, target: null,
         destination: dest,
         origin: origin,
         difference: dest.clone().sub(origin),
@@ -456,11 +457,13 @@ function PROGRESS_attack_piece(){
     else{ // heading back
         current_action.offset -= attack_movement_speed*action_speed;
         // check if we've now completed the movement, if so, end this action 
-        if (current_action.offset <= 0.0 && current_action.impact_offset < 0.0){
+        if (current_action.offset <= 0.0 && (current_action.target_exists == false || current_action.impact_offset < 0.0)){
             // cleanup the highlight
             clear_highlight_index(current_action.cleanup_ind, current_action.player_id);
             current_action.unit.mesh.position.copy(current_action.origin);
-            current_action.target.mesh.position.copy(current_action.destination);
+            if (current_action.target != null){ 
+                current_action.target.mesh.position.copy(current_action.destination);
+            }
 
             if (current_action.attacker_exists == false){
                 // then we have to clearnup the target, aka delete
@@ -488,20 +491,21 @@ function PROGRESS_attack_piece(){
         next_step_pos.y = next_step_pos.y + upwards_jump;
         current_action.unit.mesh.position.copy(next_step_pos);
     }
-
-    if (!current_action.has_impacted && curr_distance != null && curr_distance.length() < attack_impact_distance){
-        // now update the health of the unit
-        current_action.target.defense = current_action.target_new_health;
-        current_action.has_impacted = true
-        current_action.impact_acceleration = attack_impact_init_force;
-    }
-    if (current_action.has_impacted && current_action.impact_offset >= 0.0 ){
-        // now test how far away the target is push the piece 
-        current_action.impact_offset += current_action.impact_acceleration;
-        current_action.impact_acceleration -= attack_impact_decel_rate*action_speed;
-
-        let curr_step = current_action.difference.clone().normalize().multiplyScalar(current_action.impact_offset).add(current_action.destination);
-        current_action.target.mesh.position.copy(curr_step);
+    if (current_action.target_exists != false) { // null should be true here
+        if (!current_action.has_impacted && curr_distance != null && curr_distance.length() < attack_impact_distance){
+            // now update the health of the unit
+            current_action.target.defense = current_action.target_new_health;
+            current_action.has_impacted = true
+            current_action.impact_acceleration = attack_impact_init_force;
+        }
+        if (current_action.has_impacted && current_action.impact_offset >= 0.0 ){
+            // now test how far away the target is push the piece 
+            current_action.impact_offset += current_action.impact_acceleration;
+            current_action.impact_acceleration -= attack_impact_decel_rate*action_speed;
+    
+            let curr_step = current_action.difference.clone().normalize().multiplyScalar(current_action.impact_offset).add(current_action.destination);
+            current_action.target.mesh.position.copy(curr_step);
+        }
     }
 }
 const unit_drop_height = 18.5;
@@ -1015,6 +1019,11 @@ function client_keydown(event){
         try_place_unit_at_selected(unit_tower);
     }
 }
+function messagebox_keydown(event){
+    if (event.key == 'Enter'){
+        send_message_as_client();
+    }
+}
 
 
 
@@ -1189,6 +1198,14 @@ function attempt_to_connect_to_server(){
         connection_state = 1;
         connect_client_to_server();
 });}
+// what is going on here ??
+function attempt_to_paste_and_join(){
+    let test = navigator.clipboard.readText();
+    if (test != null && test != ""){
+        server_code_text.value = test;
+        attempt_to_connect_to_server();
+    }
+}
 function connect_client_to_server(){
     try{server_connection = client.connect(server_code);
         server_connection.on('error', server_error);

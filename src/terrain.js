@@ -7,11 +7,19 @@ var greater_noise2D = null;
 // ///////// //
 const tile_height = 0.4;
 const geometry      = new THREE.CylinderGeometry(1,1,tile_height,6);
+/* grasslands kinda color
 const MAT_tile_top  = new THREE.MeshPhongMaterial({color: 0xd7e1ca, flatShading: true });
 const MAT_tile_high = new THREE.MeshPhongMaterial({color: 0x497910, flatShading: true });
 const MAT_tile_mid  = new THREE.MeshPhongMaterial({color: 0x7aa700, flatShading: true });
 const MAT_tile_low  = new THREE.MeshPhongMaterial({color: 0xbfd134, flatShading: true });
 const MAT_tile_bot  = new THREE.MeshPhongMaterial({color: 0x003ca6, flatShading: true });
+*/
+// mesa lands color 
+const MAT_tile_top  = new THREE.MeshPhongMaterial({color: 0x812B30, flatShading: true });
+const MAT_tile_high = new THREE.MeshPhongMaterial({color: 0xAA2600, flatShading: true });
+const MAT_tile_mid  = new THREE.MeshPhongMaterial({color: 0xE76300, flatShading: true });
+const MAT_tile_low  = new THREE.MeshPhongMaterial({color: 0xD43A00, flatShading: true });
+const MAT_tile_bot  = new THREE.MeshPhongMaterial({color: 0x994947, flatShading: true });
 
 // ////////////////// //
 // TILE HIGHLIGHTING //

@@ -30,6 +30,7 @@ var action_time = max_action_time;
 // CONSOLE CODE //
 // /////////// //
 var console_textbox = document.getElementById("console_text");
+var is_printing_debug = true;
 const con_error = '#ff0000';
 const con_warning = '#ffda00';
 const con_success = '#00ff00';
@@ -37,6 +38,7 @@ const con_debug = '#ffffff';
 const con_note = '#00ddff';
 post_to_console("UI loaded", con_success);
 function post_to_console(message, color){
+    if (!is_printing_debug && color == con_note) return;
     let newSpan = document.createElement('span');
     let currentdate = new Date(); 
     newSpan.innerHTML = "[" + currentdate.getHours() + ":"  
@@ -68,6 +70,7 @@ CMDs_list = {
     seed:       {func: CMD_get_seed,             hint: "prints out the current session's seed string"},
     id:         {func: CMD_get_session_id,       hint: "prints the current session's id (players will need this to connect)"},
     clear:      {func: CMD_clear_chat,           hint: "clears all text from the console output window"},
+    debug:      {func: CMD_toggle_debug,         hint: "toggles whether to display the blue debug console messages"},
 }
 function process_cmd(command, params){
     let cmd = CMDs_list[command];
@@ -234,6 +237,10 @@ function CMD_get_session_id(garbage){
 }
 function CMD_clear_chat(garbage){
     console_textbox.replaceChildren();
+}
+function CMD_toggle_debug(garbage){
+    is_printing_debug = !is_printing_debug;
+    post_to_console("show debug messages is now: " + is_printing_debug, con_debug);
 }
 
 
@@ -462,7 +469,9 @@ function is_playerinfo_valid(connection, content){
     }
     return true;
 }
-
+// ///////////////////////// //
+// USER INTERFACE FUNCTIONS //
+// /////////////////////// //
 // server copy info buttons
 function copy_gamecode(){
     if (server_id != null){
@@ -470,6 +479,11 @@ function copy_gamecode(){
 }}
 function copy_gamelink(){
     console.log("feature not currently supported, support it now");
+}
+function messagebox_keydown(event){
+    if (event.key == 'Enter'){
+        send_message_as_server();
+    }
 }
 
 
@@ -763,7 +777,7 @@ function commit_actions()
     }
 
 
-    post_to_console("Action phase over, recieved [" + all_players_actions.length + "] actions", con_debug);
+    post_to_console("Action phase over, recieved [" + all_players_actions.length + "] actions", con_note);
     submit_moves_to_client();
     // second submit a list of actions back that the client should see
     // this is how we'll beable to thin down what each client actually gets sent
@@ -885,11 +899,4 @@ function submit_moves_to_client(){
         if (players[key].connection != null){ // check to make sure this isn't the server
             players[key].connection.send({type:SERVER_sendback_moves, content:players[key].recieved_moves});
     }}
-}
-
-// ///////////////////////////////// //
-// CLIENT TO SERVER GAME NETWORKING //
-// /////////////////////////////// //
-function client_submitting_moves(){
-
 }

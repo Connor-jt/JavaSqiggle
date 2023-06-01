@@ -36,8 +36,8 @@
                 <div class="chatfield" id="chatbox_field">
                 </div>
                 <div class="chatinputs">
-                    <input type="text" placeholder="Enter Message.." id="server_message_field">
-                    <button onclick="send_message_as_server();">send</button>
+                    <input type="text" value="/start" onkeydown="messagebox_keydown(event);" placeholder="Enter Message.." id="server_message_field" class="message_box">
+                    <button onclick="send_message_as_server();" class="message_button">send</button>
                 </div>
             </div>
         </div>

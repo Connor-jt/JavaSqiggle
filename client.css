@@ -46,6 +46,7 @@ body {
 }
 
 .cinemator {
+    pointer-events: none;
     position: absolute; 
     width: 100%; 
     background-color:black;
@@ -127,6 +128,7 @@ button{
 }
 .playerbox{
     margin-right: 175px;
+    text-align: right;
     width: 150px;
     position: absolute;
     left: calc(100% - 175px);

@@ -58,8 +58,8 @@
             <div class="chatbox">
                 <div class="chatfield" id="chatbox_field">
                 </div>
-                <input type="text" placeholder="Enter Message.." id="client_message_field" style="width: 140px;">
-                <button onclick="send_message_as_client();">send</button>
+                <input type="text" onkeydown="messagebox_keydown(event);" placeholder="Enter Message.." id="client_message_field" style="width: 140px; margin: 0px;">
+                <button onclick="send_message_as_client();" style="margin: 0px;">send</button>
             </div>
         </div>
 
@@ -69,8 +69,9 @@
             <span id="status_field">input the server's id to start</span><br/>
             <!-- SET SERVER UI -->
             <div id="join_session_form">
-                <input type="text" placeholder="Enter game code.." id="join_code_field">
-                <button onclick="attempt_to_connect_to_server();">send</button>
+                <input type="text" placeholder="Enter game code.." id="join_code_field"  style="margin: 0px;">
+                <button onclick="attempt_to_paste_and_join();" style="margin: 0px;">paste</button>
+                <button onclick="attempt_to_connect_to_server();" style="margin: 0px;">send</button>
             </div>
             <!-- JOINING SERVER UI -->
             <div id="player_info_form" class="hidden">
