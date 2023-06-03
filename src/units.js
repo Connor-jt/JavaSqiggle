@@ -45,7 +45,7 @@ function stats_for_unit(type){
     else if (type == unit_soldier) return create_soldier();
     else if (type == unit_sniper)  return create_sniper();
     else if (type == unit_tower)   return create_tower();
-
+    
     return -1;
 }
 function create_soldier(){

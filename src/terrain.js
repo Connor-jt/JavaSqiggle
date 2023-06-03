@@ -19,7 +19,7 @@ const MAT_tile_top  = new THREE.MeshPhongMaterial({color: 0x812B30, flatShading:
 const MAT_tile_high = new THREE.MeshPhongMaterial({color: 0xAA2600, flatShading: true });
 const MAT_tile_mid  = new THREE.MeshPhongMaterial({color: 0xE76300, flatShading: true });
 const MAT_tile_low  = new THREE.MeshPhongMaterial({color: 0xD43A00, flatShading: true });
-const MAT_tile_bot  = new THREE.MeshPhongMaterial({color: 0x994947, flatShading: true });
+const MAT_tile_bot  = new THREE.MeshPhongMaterial({color: 0xB97977, flatShading: true });
 
 // ////////////////// //
 // TILE HIGHLIGHTING //
@@ -49,6 +49,7 @@ const MAT_preview_range_highlight = new THREE.MeshBasicMaterial({color: 0xff5f5f
 const MAT_preview_attack_highlight = new THREE.MeshBasicMaterial({color: 0xffff4f4f });
 
 const pointer_tile_size_multiplier = 0.8;
+const pointer_tile_height = 0.85;
 const action_tile_size_multiplier = 1.1;
 function action_hightlight_tile(x, y, type, unit_type){ // unit_type is only used when we 
     // create highlight item if not created already
@@ -99,7 +100,7 @@ function hightlight_tile(x, y){
     // create highlight item if not created already
     if (highlight == null){
         highlight = new THREE.Mesh(geometry, MAT_highlight);
-        highlight.scale.set(1*pointer_tile_size_multiplier, highlight_pointer_hieght, 1*pointer_tile_size_multiplier); // set height
+        highlight.scale.set(1*pointer_tile_size_multiplier, pointer_tile_height, 1*pointer_tile_size_multiplier); // set height
         scene.add(highlight);
     }
     let pos_off = get_location_offset(x, y);

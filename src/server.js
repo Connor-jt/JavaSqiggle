@@ -392,10 +392,10 @@ function recieved_data_from_client(data){
         // [-64-64, -64-64] //
         let off_x = Math.floor(Math.random() * 129) - 64;
         let off_y = Math.floor(Math.random() * 129) - 64;
-        all_players_actions.push({ type: create_unit, pos: [off_x  , off_y  ], player_id: new_player.id, unit: unit_soldier, cleanup_ind: -1 })
-        all_players_actions.push({ type: create_unit, pos: [off_x  , off_y+1], player_id: new_player.id, unit: unit_worker,  cleanup_ind: -1 })
-        all_players_actions.push({ type: create_unit, pos: [off_x+1, off_y  ], player_id: new_player.id, unit: unit_soldier, cleanup_ind: -1 })
-        all_players_actions.push({ type: create_unit, pos: [off_x+1, off_y+1], player_id: new_player.id, unit: unit_worker,  cleanup_ind: -1 })
+        all_players_actions.push({ type: create_unit, pos: [off_x  , off_y  ], player_id: new_player.id, unit: unit_soldier })
+        all_players_actions.push({ type: create_unit, pos: [off_x  , off_y+1], player_id: new_player.id, unit: unit_worker})
+        all_players_actions.push({ type: create_unit, pos: [off_x+1, off_y  ], player_id: new_player.id, unit: unit_soldier })
+        all_players_actions.push({ type: create_unit, pos: [off_x+1, off_y+1], player_id: new_player.id, unit: unit_worker })
 
         send_message('server', new_player.name + " has joined the game!");
         UI_addplayer(new_player.name, new_player.id, new_player.color);
@@ -626,13 +626,13 @@ function commit_actions()
             let sees_attacker = curr_player.vis_units[attacker_key] != null;
             let sees_target = curr_player.vis_units[target_key] != null;
             if (sees_attacker && sees_target){
-                curr_player.recieved_moves.push({ type: attack_unit, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: attack_unit, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, player_id: catt_act.player_id });
             }
             else if (sees_attacker){
-                curr_player.recieved_moves.push({ type: blind_attack_unit, unit_id: moved_unit.unit_id, target_pos: target_unit.pos, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: blind_attack_unit, unit_id: moved_unit.unit_id, target_pos: target_unit.pos, player_id: catt_act.player_id });
             }
             else if (sees_target){
-                curr_player.recieved_moves.push({ type: create_attack_unit, pos:moved_unit.pos, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, cleanup_ind: catt_act.cleanup_ind, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: create_attack_unit, pos:moved_unit.pos, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, player_id: catt_act.player_id });
             }
             // else they dont see anything occur
         }
@@ -688,7 +688,7 @@ function commit_actions()
             let sees_new_pos = curr_player.vis_tiles[new_unit_key] != null;
             // owner gets free pass to push 
             if (curr_player.id == moved_unit.owner){
-                curr_player.recieved_moves.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, cleanup_ind: cmov_act.cleanup_ind, player_id: cmov_act.player_id });
+                curr_player.recieved_moves.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, player_id: cmov_act.player_id });
                 delete curr_player.vis_units[curr_unit_key];
                 curr_player.vis_units[new_unit_key] = 1;
                 player_see_area(curr_player, moved_unit.pos[0], moved_unit.pos[1], moved_unit.vision_range);
@@ -696,7 +696,7 @@ function commit_actions()
             }
             // if they can see this unit, pushback unit move
             else if (sees_unit){ // we dont need to see the final position, because the client will themselves figure out if the piece should lose visibility or not
-                curr_player.recieved_moves.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, cleanup_ind: cmov_act.cleanup_ind, player_id: cmov_act.player_id });
+                curr_player.recieved_moves.push({ type: move_unit, unit_id: moved_unit.unit_id, pos: moved_unit.pos, player_id: cmov_act.player_id });
                 delete curr_player.vis_units[curr_unit_key];
                 if (sees_new_pos){
                     curr_player.vis_units[new_unit_key] = 1;
@@ -704,7 +704,7 @@ function commit_actions()
             }
             // if they can see the tile that they move to, pushback moveto_create
             else if (sees_new_pos){
-                curr_player.recieved_moves.push({ type: create_move_unit, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, og_pos: og_pos, pos: moved_unit.pos, cleanup_ind: cmov_act.cleanup_ind, player_id: cmov_act.player_id });
+                curr_player.recieved_moves.push({ type: create_move_unit, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, og_pos: og_pos, pos: moved_unit.pos, player_id: cmov_act.player_id });
                 curr_player.vis_units[new_unit_key] = 1;
             }
             // else they dont see it before/after, so nothing happens
@@ -751,7 +751,7 @@ function commit_actions()
 
         let unit = SERVER_CREATE_UNIT(creat_acto.unit, creat_acto.pos, creat_acto.player_id); 
         
-        let new_unit_action = { type: create_unit, unit_id: unit.unit_id, unit: unit.type, pos: unit.pos, cleanup_ind: creat_acto.cleanup_ind, player_id: creat_acto.player_id };
+        let new_unit_action = { type: create_unit, unit_id: unit.unit_id, unit: unit.type, pos: unit.pos, player_id: creat_acto.player_id };
         played_units[unit.unit_id] = 1;
         server_units[unit.pos[0]+','+unit.pos[1]] = unit;
 
@@ -770,7 +770,7 @@ function commit_actions()
                 if (curr_player.vis_units[unit_key] != null){
                     console.log("server is trying to tell client to create unit that they already see")
                 }else{
-                    curr_player.recieved_moves.push({ type: create_unit, unit_id: unit.unit_id, unit: unit.type, pos: unit.pos, cleanup_ind: new_unit_action.cleanup_ind, player_id: new_unit_action.player_id });
+                    curr_player.recieved_moves.push({ type: create_unit, unit_id: unit.unit_id, unit: unit.type, pos: unit.pos, player_id: new_unit_action.player_id });
                     curr_player.vis_units[unit_key] = 1;
                 }
         }}

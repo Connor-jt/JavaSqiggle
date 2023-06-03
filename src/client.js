@@ -93,6 +93,9 @@ function initialize(map_seed){
     window.addEventListener( 'pointermove', onPointerMove );
 
     animate();
+    // test
+    let test_mesh = new THREE.Mesh(mesh_geo, fail_indicator_mat)
+    scene.add(test_mesh);
 }
 
 // /////////////////// //
@@ -164,6 +167,7 @@ function select_unit(selec_unit){
     currently_selected_unit = selec_unit;
     // TODO: UPDATE THIS TO USE UNIT COORDS
     preview_moves_at(selected_tile[0], selected_tile[1], currently_selected_unit.attack_range, currently_selected_unit.move_range, onscreen_units);
+    // we also need to display any highgluight moves that this unit muight have
 }
 function select_unit_at(position_Array){
     let current_coords = position_Array[0] + ',' + position_Array[1];
@@ -196,6 +200,7 @@ function animate() {
     // check to see if any visual ui needs updating
     update_hovered_stuff();
 
+    animate_move_fail_indicators();
     // runtime commit player actions to the gamestate
     if (current_action == undefined && current_action != null ) return;
     if (current_action == null){
@@ -208,13 +213,36 @@ function animate() {
 // /////////////////// //
 // GAME RUNTIME LOGIC //
 // ///////////////// //
-function prompt_text(){
-    // this function will print text4 to the middle of the players screen
-    // this will be used for general user feedbak, like "you aren't allowed to place units here"
-    // or "piece has been lost"
-    // or "capture the points to generate points"
-    // or "use the number keys to placeunits"
-    // idk, stuff like that
+var failed_moves = [];
+/* sample: {
+    mesh:
+    progress:
+}*/
+const fail_indicator_mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+const fail_indicator_scale = 0.8;
+const fail_indicator_shrink_rate = 0.013;
+function animate_move_fail_indicators(){
+    for (let j = 0; j < failed_moves.length; j++){
+        let curr_obj = failed_moves[j];
+        curr_obj.progress -= fail_indicator_shrink_rate;
+        if (curr_obj.progress <= 0.0){
+            // cleanup
+            scene.remove(curr_obj.mesh);
+            failed_moves.splice(j, 1);
+            j--;
+            console.log("completed failed move indicator");
+            continue;
+        }
+        // else just continue scaling down
+        curr_obj.mesh.scale.set(curr_obj.progress,curr_obj.progress,curr_obj.progress);
+}}
+function create_fail_indicator(vector_pos){
+    let test_mesh = new THREE.Mesh(mesh_geo, fail_indicator_mat)
+    scene.add(test_mesh);
+    failed_moves.push({mesh:test_mesh, progress:fail_indicator_scale});
+    // then assign it to the correct position
+    // let pos__off = get_location_offset(pos[0], pos[1]);
+    test_mesh.position.copy(vector_pos); // new THREE.Vector3(pos__off[0], find_visual_hieght_at(pos[0]+","+pos[1], pos__off[0], pos__off[1]), pos__off[1]);
 }
 
 var current_action = null;
@@ -224,13 +252,13 @@ function commit_next_action(){
     if (actions_to_commit == undefined) return;
     let next_action = get_next_action_to_commit();
     if (next_action == null) disable_action_mode(); // if null, then there are no more actions to process
-    else if (next_action.type == create_unit)       create_piece(next_action);
-    else if (next_action.type == move_unit)         move_piece(next_action);
-    else if (next_action.type == create_move_unit)  move_piece(next_action);
-    else if (next_action.type == attack_unit)       attack_piece(next_action);
+    else if (next_action.type == create_unit)        create_piece(next_action);
+    else if (next_action.type == move_unit)          move_piece(next_action);
+    else if (next_action.type == create_move_unit)   move_piece(next_action);
+    else if (next_action.type == attack_unit)        attack_piece(next_action);
     else if (next_action.type == create_attack_unit) create_attack_piece(next_action);
-    else if (next_action.type == blind_attack_unit) blind_attack_piece(next_action);
-    else if (next_action.type == destroy_unit)      action_destroy_piece(next_action);
+    else if (next_action.type == blind_attack_unit)  blind_attack_piece(next_action);
+    else if (next_action.type == destroy_unit)       action_destroy_piece(next_action);
 }
 var action_phase = 0;
 const committing_attack_actions  = 0;
@@ -275,6 +303,7 @@ function progress_current_action(){
     if      (current_action.type == create_unit)   PROGRESS_create_piece();
     else if (current_action.type == move_unit)     PROGRESS_move_piece();
     else if (current_action.type == attack_unit)   PROGRESS_attack_piece();
+    else if (current_action.type == destroy_unit)  PROGRESS_destroy_piece(); // yes we now animate destroy events
     else    current_action = null;
 }
 function move_piece(action){
@@ -289,7 +318,7 @@ function move_piece(action){
         delete onscreen_units[target_unit.pos[0]+","+target_unit.pos[1]];
     }
     else{ // 'create_move_unit'
-        target_unit = create_piece_at(action.unit, action.unit_id, action.og_pos, action.player_id);
+        target_unit = create_piece_at(action.unit_type, action.unit_id, action.og_pos, action.player_id);
     }
 
     let old_pos = [target_unit.pos[0], target_unit.pos[1]];
@@ -315,7 +344,6 @@ function move_piece(action){
         destination: dest_pos,
         difference: difference,
         offset: 0.0,
-        cleanup_ind: action.cleanup_ind
     };
 }
 const movement_speed = 0.028;
@@ -326,7 +354,7 @@ function PROGRESS_move_piece(){
     // check if we've now completed the movement, if so, end this action 
     if (current_action.offset >= 1){
         // cleanup the highlight
-        clear_highlight_index(current_action.cleanup_ind, current_action.player_id);
+        clear_unit_highlights(current_action.unit);
         current_action.unit.mesh.position.copy(current_action.destination);
         // now test to see if they stopped being visible
         let final_pos_str = current_action.unit.pos[0] + ',' + current_action.unit.pos[1];
@@ -372,7 +400,6 @@ function attack_piece(action){
         impact_offset: 0.0,
         impact_acceleration: 0.0,
         has_impacted: false,
-        cleanup_ind: action.cleanup_ind,
         target_new_health: action.new_health,
         // special conditions for cases where either attacker or target are not seen
         target_exists: true,
@@ -402,7 +429,6 @@ function create_attack_piece(action){
         impact_offset: 0.0,
         impact_acceleration: 0.0,
         has_impacted: false,
-        cleanup_ind: action.cleanup_ind,
         target_new_health: action.new_health,
         // special conditions for cases where either attacker or target are not seen
         target_exists: true,
@@ -410,7 +436,7 @@ function create_attack_piece(action){
     };
 
 }
-// THIS ONE IS NOT DONE YET !!!!!!!!!!!!!
+// THIS ONE IS NOT DONE YET !!!!!!!!!!!!! // i think its done now
 function blind_attack_piece(action){
     let attacker_unit = get_client_unit_by_id(action.unit_id);
     if (attacker_unit == null){
@@ -432,7 +458,6 @@ function blind_attack_piece(action){
         impact_offset: 0.0,
         impact_acceleration: 0.0,
         has_impacted: false,
-        cleanup_ind: action.cleanup_ind,
         target_new_health: action.new_health,
         // special conditions for cases where either attacker or target are not seen
         target_exists: false,
@@ -459,7 +484,7 @@ function PROGRESS_attack_piece(){
         // check if we've now completed the movement, if so, end this action 
         if (current_action.offset <= 0.0 && (current_action.target_exists == false || current_action.impact_offset < 0.0)){
             // cleanup the highlight
-            clear_highlight_index(current_action.cleanup_ind, current_action.player_id);
+            clear_unit_highlights(current_action.unit);
             current_action.unit.mesh.position.copy(current_action.origin);
             if (current_action.target != null){ 
                 current_action.target.mesh.position.copy(current_action.destination);
@@ -531,7 +556,6 @@ function create_piece(action){ // this will be used in a lot of places i think
         destination: new THREE.Vector3(pos_off[0], action_tile_height, pos_off[1]),
         position: new THREE.Vector3(pos_off[0], action_tile_height + unit_drop_height, pos_off[1]),
         acceleraton: 0,
-        cleanup_ind: action.cleanup_ind
     };
     created_unit.mesh.position.copy(current_action.position);
 
@@ -545,7 +569,14 @@ function PROGRESS_create_piece(){
         // if the unit is under and is moving too slowly, then we can assume they've stopped bouncing
         if (Math.abs(current_action.acceleraton) < unit_drop_gravity*5 ){
             // cleanup the highlight
-            clear_highlight_index(current_action.cleanup_ind, current_action.player_id);
+            // we dont have highlights on that unit, we created them with the thing queue
+            //clear_unit_highlights(current_action.unit);
+            let selected_coord_str = current_action.unit.pos[0]+","+current_action.unit.pos[1];
+            let test_tile = queued_creation_highlights[selected_coord_str];
+            if (test_tile != null){
+                scene.remove(test_tile);
+                delete queued_creation_highlights[selected_coord_str];
+            }
             // finish bounce
             current_action.unit.mesh.position.copy(current_action.destination);
             current_action = null;
@@ -556,12 +587,37 @@ function PROGRESS_create_piece(){
     current_action.position.set(current_action.position.x, current_action.position.y - current_action.acceleraton, current_action.position.z);
     current_action.unit.mesh.position.copy(current_action.position);
 }
+// TO DO
+const destroy_unit_expand_size = 1.3;
+const destroy_unit_expand_step = 0.08;
+const destroy_unit_shrink_step = 0.15;
 
+const destroy_skull_init_size = 0.8;
+const destroy_skull_expand_size = 2.8;
+const destroy_skull_expand_step = 0.05;
+const destroy_skull_shrink_step = 0.21;
 function action_destroy_piece(action){
-    delete_unit(get_client_unit_by_id(action.unit_id));
+    let target_unit = get_client_unit_by_id(action.unit_id);
+    
+    move_camera_to_coords(created_unit.pos);
+
+
+    delete_unit();
     current_action = null;
+    current_action = { type: destroy_unit, unit: created_unit, 
+
+        destination: new THREE.Vector3(pos_off[0], action_tile_height, pos_off[1]),
+        position: new THREE.Vector3(pos_off[0], action_tile_height + unit_drop_height, pos_off[1]),
+        acceleraton: 0,
+    };
 }
+function PROGRESS_destroy_piece(){
+
+}
+
 function delete_unit(target_unit){
+    // clear their visibles, this woule only be fore if a unit was destroyed and was not able to make their move during action phase
+    clear_unit_highlights(target_unit);
     // clear the model from the scene
     scene.remove(target_unit.mesh);
     // clear the visible tiles owned by the unit
@@ -582,12 +638,11 @@ function create_piece_at(type, unit_id, coords, owner_id){
     let created_unit = CLIENT_CREATE_UNIT(type, unit_id, coords, return_player_from_id(owner_id));
     // add it to the scene and adjust position to match the set position
     scene.add(created_unit.mesh);
-    let position = created_unit.pos[0]+","+created_unit.pos[1];
-
+    let pos_ition = created_unit.pos[0]+","+created_unit.pos[1];
     let pos__off = get_location_offset(created_unit.pos[0], created_unit.pos[1]);
-    let action__tile_height = find_visual_hieght_at(position, pos__off[0], pos__off[1]);
-    created_unit.mesh.position = new THREE.Vector3(pos__off[0], action__tile_height, pos__off[1]);
+    let action__tile_height = find_visual_hieght_at(pos_ition, pos__off[0], pos__off[1]);
     
+    created_unit.mesh.position.set(pos__off[0], action__tile_height, pos__off[1]);
     return created_unit;
 }
 
@@ -617,8 +672,6 @@ function enable_action_mode(){
 }
 function disable_action_mode(){
     deselect_unit(); // just as a backup
-    // then we try and select the unit that we're hovered over at the moment
-    select_unit_at(selected_tile);
 
     is_in_action_mode = false;
     // make the text invisible
@@ -627,17 +680,30 @@ function disable_action_mode(){
     action_active_bot.classList.toggle('fade');
     // cleanup any denied actions
     let leftovers_counter = 0;
-    for (let key in highlight_cleanups) {
-        // access each key, remove from scene and then delete it
-        while (highlight_cleanups[key].length > 0) {
-            scene.remove(highlight_cleanups[key].pop());
-        }
-        delete highlight_cleanups[key];
+    for (let key in queued_creation_highlights){
+        let test_tile = queued_creation_highlights[key];
+        create_fail_indicator(test_tile.position);
+        scene.remove(test_tile);
+        delete queued_creation_highlights[key];
         leftovers_counter++;
+    }
+        
+    for (let key in onscreen_units) {
+        let curr_unit = onscreen_units[key];
+        // hopefully this will convert them to ints and have them just work
+        if (curr_unit.self_highlight != null || curr_unit.target_highlight != null){
+            leftovers_counter++;
+            create_fail_indicator(onscreen_units[key].mesh.position);
+            clear_unit_highlights(onscreen_units[key]);
+        }
     }
     if (leftovers_counter > 0){
         console.log("[CLIENT] there were " + leftovers_counter + " denied actions, cleared")
     }
+    // then we try and select the unit that we're hovered over at the moment
+    // make sure we serlect them after cleaning up the highlights
+    select_unit_at(selected_tile);
+
     update_cursor_type(); // so if we dont move cams, it'll still update
 
 }
@@ -673,20 +739,21 @@ function return_action_queue_and_cleanup(){
 // SERVER SENDING FUNCTIONS //
 // /////////////////////// //
 var action_queue = [];
-var highlight_cleanups = {};
-var curr_cleanup_index = 0;
-function new_highlight_cleanup(the_entry){ // has to be in an array formT
-    curr_cleanup_index++;
-    highlight_cleanups[curr_cleanup_index] = the_entry;
-    return curr_cleanup_index;
-}
-function clear_highlight_index(index, player_id){ // this probably isn't the best idea
-    if (player_id != our_playerid) return;
-    if (index == -1) return;
-    for (entries in highlight_cleanups[index] ){
-        scene.remove(highlight_cleanups[index][entries]);
+var queued_creation_highlights = {};
+// example ojbect:
+/*
+[coordstr]: just contains an object reference to the vis obj
+*/
+function clear_unit_highlights(unit_object){ 
+    if (unit_object == null) return;
+    if (unit_object.self_highlight != null){
+        scene.remove(unit_object.self_highlight);
+        unit_object.self_highlight = null;
     }
-    delete highlight_cleanups[index];
+    if (unit_object.target_highlight != null){
+        scene.remove(unit_object.target_highlight);
+        unit_object.target_highlight = null;
+    }
 }
 
 function count_highlight_cleanups(){
@@ -696,24 +763,26 @@ function count_highlight_cleanups(){
 }
 function try_move_unit_to_pos(unit, to_coords){
     // first we need to check if this piece already has a move queued, then we should cancel their current move and assign a new one
-    clear_units_prev_queued_move(unit.unit_id);
+    clear_units_prev_queued_move(unit);
     if (!test_whether_pos_is_occupied(to_coords)) {
         QUEUE_move_piece(unit, to_coords);
     }
 }
 function QUEUE_move_piece(unit, to_coords){
-    let cleanup_index = new_highlight_cleanup([action_hightlight_tile(to_coords[0], to_coords[1], move_unit), 
-                                               action_hightlight_tile(unit.pos[0], unit.pos[1], create_unit, unit.type)]);
-    action_queue.push({ type: move_unit, pos: to_coords, unit_id: unit.unit_id, cleanup_ind: cleanup_index })
+    // setup hightlights
+    unit.target_highlight = action_hightlight_tile(to_coords[0], to_coords[1], move_unit);
+    unit.self_highlight = action_hightlight_tile(unit.pos[0], unit.pos[1], create_unit, unit.type)
+
+    action_queue.push({ type: move_unit, pos: to_coords, unit_id: unit.unit_id })
 }
 function QUEUE_attack_piece(unit, target_unit){
     // clear their previous move if they had one
-    // clear_units_prev_queued_move(unit_id);
-    clear_units_prev_queued_move(unit.unit_id);
-    
-    let cleanup_index = new_highlight_cleanup([action_hightlight_tile(target_unit.pos[0], target_unit.pos[1], attack_unit), 
-                                               action_hightlight_tile(unit.pos[0], unit.pos[1], create_unit, unit.type)]);
-    action_queue.push({ type: attack_unit, target: target_unit.unit_id, unit_id: unit.unit_id, cleanup_ind: cleanup_index })
+    clear_units_prev_queued_move(unit);
+    // setup hightlights
+    unit.target_highlight = action_hightlight_tile(target_unit.pos[0], target_unit.pos[1], attack_unit);
+    unit.self_highlight = action_hightlight_tile(unit.pos[0], unit.pos[1], create_unit, unit.type)
+
+    action_queue.push({ type: attack_unit, target: target_unit.unit_id, unit_id: unit.unit_id })
 }
 function try_place_unit_at_selected(type){
     if (!test_whether_pos_is_occupied(selected_tile)) {
@@ -722,17 +791,21 @@ function try_place_unit_at_selected(type){
 }
 function QUEUE_create_piece(type, coords){
     // here we put a highlight thing down, and we add it to a list of objects to flush when we submit all the actions
-    let cleanup_index = new_highlight_cleanup([action_hightlight_tile(coords[0], coords[1], create_unit, type)]);
-    action_queue.push({ type: create_unit, pos: coords, unit: type, cleanup_ind: cleanup_index })
+    let new_highlight = action_hightlight_tile(coords[0], coords[1], create_unit, type);
+    let coord_str = coords[0] + ',' +coords[1];
+    queued_creation_highlights[coord_str] = new_highlight;
+
+    action_queue.push({ type: create_unit, pos: coords, unit: type })
 }
-function clear_units_prev_queued_move(unit_id){
+function clear_units_prev_queued_move(unit_obj){
     for (let j = 0; j < action_queue.length; j++){
         if (action_queue[j].type == move_unit || action_queue[j].type == attack_unit){
-            if (action_queue[j].unit_id == unit_id){
+            if (action_queue[j].unit_id == unit_obj.unit_id){
                 // cleanup their highlighted block
-                clear_highlight_index(action_queue[j].cleanup_ind, action_queue[j].player_id)
+                clear_unit_highlights(unit_obj)
                 action_queue.splice(j, 1);
-                j--; // nlt needed but good practice anyway i think
+                j--; // not needed but good practice anyway i think
+                // we could definitely use a return here, becasue units should not beable to use more than one move
             }
         }
     }
@@ -1017,8 +1090,29 @@ function client_keydown(event){
         try_place_unit_at_selected(unit_sniper);
     } else if (event.key === '4'){ 
         try_place_unit_at_selected(unit_tower);
-    }
-}
+    } else if (event.key === ' '){
+        // find the currently selected unit first, thankfully we have that saaved already
+        if (currently_selected_unit != null){
+            clear_units_prev_queued_move(currently_selected_unit);
+        }
+        else{ // is create umnit tile selected
+            let selected_coord_str = selected_tile[0] + ',' + selected_tile[1];
+            let test_tile = queued_creation_highlights[selected_coord_str];
+            // see if theres a acreate unit tile here
+            if (test_tile != null){
+                // we can find the creation event by position?
+                for (let j = 0; j < action_queue.length; j++){
+                    let curr_action = action_queue[j];
+                    // if the position matches, then thats our event
+                    if (curr_action.type == create_unit && curr_action.pos[0] == selected_tile[0] && curr_action.pos[1] == selected_tile[1] ){
+                        // cleanup highlight
+                        scene.remove(test_tile);
+                        delete queued_creation_highlights[selected_coord_str];
+                        // take the item out of the queue
+                        action_queue.splice(j, 1);
+                        j--;
+        }}}}
+}}
 function messagebox_keydown(event){
     if (event.key == 'Enter'){
         send_message_as_client();

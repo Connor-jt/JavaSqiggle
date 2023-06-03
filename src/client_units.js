@@ -41,6 +41,8 @@ const tower_material   = new THREE.MeshLambertMaterial({color: unit_tower_color,
 function CLIENT_CREATE_UNIT(type, unit_id, position, player){
     let new_unit = init_new_unit_object(type, position, player.id);
     new_unit.unit_id = unit_id;
+    new_unit.self_highlight = null; // used to visualize that this target has had a move allocated
+    new_unit.target_highlight = null; // used to visualize what this unit'sa target is
     if      (type == unit_worker)  new_unit.mesh = new THREE.Mesh(unit_mesh_geo, player.worker_mat);
     else if (type == unit_soldier) new_unit.mesh = new THREE.Mesh(unit_mesh_geo, player.soldier_mat);
     else if (type == unit_sniper)  new_unit.mesh = new THREE.Mesh(unit_mesh_geo, player.sniper_mat);
