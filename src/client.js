@@ -75,7 +75,7 @@ function initialize(map_seed){
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    renderer.setClearColor(0x333F47, 1);
+    renderer.setClearColor(0x442929, 1);
     // ///////////////// //
     // BIND WINDOW SIZE //
     // /////////////// //
@@ -91,11 +91,25 @@ function initialize(map_seed){
     controls.domElement.addEventListener( 'mousedown', client_mousedown, false );
     window.addEventListener("keypress", client_keydown);
     window.addEventListener( 'pointermove', onPointerMove );
+    // ///////////////// //
+    // SETUP GAME BOARD // 
+    // /////////////// //
+
+    const plan_geometry = new THREE.PlaneGeometry(10, 10);
+    new THREE.TextureLoader().load('resources/board/tile_blue_3x4.jpg', (texture) => {
+        //plan_texture.wrapS = THREE.RepeatWrapping;
+        //plan_texture.wrapT = THREE.RepeatWrapping;
+        //plan_texture.repeat.set(4, 2);
+        /*texture.offset.set(xOffset, yOffset);*/
+        let test_mesh = new THREE.Mesh(plan_geometry, new THREE.MeshBasicMaterial({map: texture,}))
+        scene.add(test_mesh);
+    }, undefined, (err) =>{
+		console.log( 'Error loading board image.' + err);
+    });
+
+
 
     animate();
-    // test
-    let test_mesh = new THREE.Mesh(mesh_geo, fail_indicator_mat)
-    scene.add(test_mesh);
 }
 
 // /////////////////// //
@@ -191,7 +205,6 @@ function calculate_realworld_position_of(unit){
 // RENDERING FUNCTION //
 // ///////////////// //
 function animate() {
-    // Read more about requestAnimationFrame at http://www.paulirish.com/2011/requestanimationframe-for-smart-animating/
     requestAnimationFrame(animate);
 
     renderer.render(scene, camera);
@@ -219,8 +232,9 @@ var failed_moves = [];
     progress:
 }*/
 const fail_indicator_mat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
-const fail_indicator_scale = 0.8;
-const fail_indicator_shrink_rate = 0.013;
+const fail_indicator_height = 0.8;
+const fail_indicator_scale = 0.65;
+const fail_indicator_shrink_rate = 0.01;
 function animate_move_fail_indicators(){
     for (let j = 0; j < failed_moves.length; j++){
         let curr_obj = failed_moves[j];
@@ -240,9 +254,11 @@ function create_fail_indicator(vector_pos){
     let test_mesh = new THREE.Mesh(mesh_geo, fail_indicator_mat)
     scene.add(test_mesh);
     failed_moves.push({mesh:test_mesh, progress:fail_indicator_scale});
+    let new_vec = vector_pos.clone();
+    new_vec.y += fail_indicator_height;
     // then assign it to the correct position
     // let pos__off = get_location_offset(pos[0], pos[1]);
-    test_mesh.position.copy(vector_pos); // new THREE.Vector3(pos__off[0], find_visual_hieght_at(pos[0]+","+pos[1], pos__off[0], pos__off[1]), pos__off[1]);
+    test_mesh.position.copy(new_vec); // new THREE.Vector3(pos__off[0], find_visual_hieght_at(pos[0]+","+pos[1], pos__off[0], pos__off[1]), pos__off[1]);
 }
 
 var current_action = null;
@@ -588,31 +604,33 @@ function PROGRESS_create_piece(){
     current_action.unit.mesh.position.copy(current_action.position);
 }
 // TO DO
-const destroy_unit_expand_size = 1.3;
-const destroy_unit_expand_step = 0.08;
-const destroy_unit_shrink_step = 0.15;
-
+const destroy_unit_size_deccel = 0.013;
+const destroy_unit_init_accel = 0.11;
+/* currently not using skulls 
 const destroy_skull_init_size = 0.8;
 const destroy_skull_expand_size = 2.8;
 const destroy_skull_expand_step = 0.05;
 const destroy_skull_shrink_step = 0.21;
+*/
 function action_destroy_piece(action){
     let target_unit = get_client_unit_by_id(action.unit_id);
     
-    move_camera_to_coords(created_unit.pos);
-
-
-    delete_unit();
-    current_action = null;
-    current_action = { type: destroy_unit, unit: created_unit, 
-
-        destination: new THREE.Vector3(pos_off[0], action_tile_height, pos_off[1]),
-        position: new THREE.Vector3(pos_off[0], action_tile_height + unit_drop_height, pos_off[1]),
-        acceleraton: 0,
+    move_camera_to_coords(target_unit.pos);
+    current_action = { type: destroy_unit, unit: target_unit, 
+        acceleraton: destroy_unit_init_accel,
+        curr_scale: 1.0,
     };
 }
 function PROGRESS_destroy_piece(){
-
+    current_action.curr_scale += current_action.acceleraton*action_speed;
+    current_action.acceleraton -= destroy_unit_size_deccel*action_speed;
+    // ok make the visual changes
+    current_action.unit.mesh.scale.set(current_action.curr_scale, current_action.curr_scale, current_action.curr_scale);
+    // if less than 0 then cleanup
+    if (current_action.curr_scale <= 0){
+        delete_unit(current_action.unit);
+        current_action = null;
+    }
 }
 
 function delete_unit(target_unit){
@@ -786,6 +804,8 @@ function QUEUE_attack_piece(unit, target_unit){
 }
 function try_place_unit_at_selected(type){
     if (!test_whether_pos_is_occupied(selected_tile)) {
+        // we also need to test whether its in range of a worker
+        // and then grab the reference to that worker and store it so we only have one worker
         QUEUE_create_piece(type,selected_tile);
     }
 }

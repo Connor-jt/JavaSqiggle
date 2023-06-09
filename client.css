@@ -17,10 +17,27 @@ body {
 
 .ui {
     position: absolute;
+    text-align: center;
+    border: 2px solid #960000;
+    border-radius: 2px;
+    padding: 5px;
+    top: 0%;
+    left: 50%;
+    transform: translate(-50%, -0%);
 }
-.ui span {
+.ui_time {
     color: #ffffff;
-    font-size: 30px;
+    font-size: 43px;
+    font-family: Impact, Haettenschweiler, 'Arial Narrow Bold', sans-serif;
+}
+.ui_money {
+    color: #ffffff;
+    font-size: 22px;
+    font-family: 'Courier New', Courier, monospace;
+}
+.ui_m_used {
+    color: lightblue;
+    font-size: 22px;
     font-family: 'Courier New', Courier, monospace;
 }
 .centered {
