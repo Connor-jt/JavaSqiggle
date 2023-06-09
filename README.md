@@ -1,5 +1,6 @@
 # Web-game
 (rename to JavaSqiggle upon completion)
+current site test link: https://connor-jt.github.io/Web-game/
 
 my first javascript project, a simple multiplayer web game
 designed as a sort of modernization of chess, where it would resemble physical board game experiences, yet leveraging the potentail of digital technology 
