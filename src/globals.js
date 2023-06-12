@@ -33,7 +33,7 @@ const unit_tower_color = 0x000000;
 const SERVER_confirm_sqiggle = 0;  // code                        // reply to client test sqiggle
 const SERVER_join_failure    = 1;  // reason                      // used to tell client that their info was not accepted, and that they will have to try again=
 const SERVER_message         = 2;  // { text: user_id: }          // replicate a message from server to all connected clients
-const SERVER_init_player     = 3;  // { id: players: seed: }      // when a new player joins, send them the list of all the current players
+const SERVER_init_player     = 3;  // { id: players: seed: money} // when a new player joins, send them the list of all the current players and some starter info
 const SERVER_new_player      = 4;  // player                      // for when a new player joins, send the info to all current players
 const SERVER_time_update     = 5;  // { turn_time: action_time: } // updates the time for clients
 const SERVER_request_moves   = 6;  // NULL                        // to tell players to send in their moves, 

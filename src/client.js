@@ -36,8 +36,11 @@ var camera;
 var controls;
 
 var timer_text = document.getElementById("timer");
-var action_text = document.getElementById("action_indicator");
+var timer_box = document.getElementById("hud");
 var messagebox_text = document.getElementById("client_message_field");
+
+var money_text = document.getElementById("currency");
+var expenses_text = document.getElementById("used_currency");
 
 function initialize(map_seed){
     // clear the background image so we can see the 3d renderer
@@ -51,13 +54,13 @@ function initialize(map_seed){
     greater_noise2D = createNoise2D(seed_gen2);
 
     scene = new THREE.Scene();
-    
-    scene.add(new THREE.GridHelper(100, 100));
+    // grid visual // REMOVE
+    scene.add(new THREE.GridHelper(2, 2));
     // /////////////////////////// //
     // SETUP DIRECTIONAL LIGHTING //
     // ///////////////////////// //
     const light_color = 0xFFFFFF;
-    const light_intensity = 1;
+    const light_intensity = 0.80;
     const light = new THREE.DirectionalLight(light_color, light_intensity);
     light.position.set(0, 10, 0);
     light.target.position.set(-5, 0, 0);
@@ -75,7 +78,7 @@ function initialize(map_seed){
     renderer = new THREE.WebGLRenderer({ antialias:true });
     renderer.setSize(window.innerWidth, window.innerHeight);
     document.body.appendChild(renderer.domElement);
-    renderer.setClearColor(0x442929, 1);
+    renderer.setClearColor(0x702020, 1);
     // ///////////////// //
     // BIND WINDOW SIZE //
     // /////////////// //
@@ -94,14 +97,26 @@ function initialize(map_seed){
     // ///////////////// //
     // SETUP GAME BOARD // 
     // /////////////// //
+    // screw this maths junk HOLY MOLY
+    // why did this take me well over 6 hours just to get a board working????? god bless javascript & three.js
+    // tile count x & y have to be equal 3:4 ratio, also needs to be an odd number else the rows are offset
+    const tile_count_x = 1503;
+    const tile_count_y = 2004;
+    const board_width_x = (tile_count_x * 1.73205);
+    const board_width_Y = (tile_count_y * 1.5);
 
-    const plan_geometry = new THREE.PlaneGeometry(10, 10);
-    new THREE.TextureLoader().load('resources/board/tile_blue_3x4.jpg', (texture) => {
-        //plan_texture.wrapS = THREE.RepeatWrapping;
-        //plan_texture.wrapT = THREE.RepeatWrapping;
-        //plan_texture.repeat.set(4, 2);
+    const plan_geometry = new THREE.PlaneGeometry(board_width_x, board_width_Y);
+    new THREE.TextureLoader().load(board_texture_64, (texture) => {
+        texture.wrapS = THREE.RepeatWrapping;
+        texture.wrapT = THREE.RepeatWrapping;
+        const repeat_X = tile_count_x/3;
+        //const repeat_Y = repeat_X * 1.151801487592027; // square ratio based
+        const repeat_Y = tile_count_y/4;
+        texture.repeat.set(repeat_Y, repeat_X);
         /*texture.offset.set(xOffset, yOffset);*/
-        let test_mesh = new THREE.Mesh(plan_geometry, new THREE.MeshBasicMaterial({map: texture,}))
+        let test_mesh = new THREE.Mesh(plan_geometry, new THREE.MeshBasicMaterial({map: texture}))
+        test_mesh.rotateX(-1.570796);
+        //test_mesh.position.set(0, -0.5, 0);
         scene.add(test_mesh);
     }, undefined, (err) =>{
 		console.log( 'Error loading board image.' + err);
@@ -118,6 +133,66 @@ function initialize(map_seed){
 var currently_selected_unit = null;
 var onscreen_units = {};
 var queued_discover_units = {};
+
+var money = 0;
+var expenses = 0;
+var has_workers_left = false; // need to update this everytime a unit is destroyed or created
+function update_money_counter(new_value){
+    money = new_value;
+    money_text.innerText = "$" + money;
+}
+function apply_expense(target_unit, is_detraction){
+    let unit_cost = 0;
+
+    if (is_detraction) unit_cost *= -1;
+    update_expenses_counter(expenses - unit_cost);
+}
+function update_expenses_counter(new_value){
+    expenses = new_value;
+    if (new_value <= 0){ // no expense
+        expenses_text.innerText = "";
+    }
+    else { // visual expense
+        expenses_text.innerText = "-" + expenses;
+    }
+}
+function get_cost_of_unit(){
+    if (has_workers_left){ // according to this logic we must only ever update worker count after action mode is disabled
+        if      (target_unit.type == unit_worker)  unit_cost = worker_cost;
+        else if (target_unit.type == unit_soldier) unit_cost = soldier_cost;
+        else if (target_unit.type == unit_sniper)  unit_cost = sniper_cost;
+        else if (target_unit.type == unit_tower)   unit_cost = tower_cost;
+    } else {
+        if      (target_unit.type == unit_worker)  unit_cost = worker_resort_cost;
+        else if (target_unit.type == unit_soldier) unit_cost = soldier_resort_cost;
+        else if (target_unit.type == unit_sniper)  unit_cost = sniper_resort_cost;
+        else if (target_unit.type == unit_tower)   unit_cost = tower_resort_cost;
+        
+    }
+}
+function update_workersleft_status(){
+    // count the workers
+    let worker_count = 0;
+    for (let key in onscreen_units){
+        let curr_unit = onscreen_units[key];
+        if (curr_unit.owner == our_playerid && curr_unit.type == unit_worker){
+            worker_count += 1;
+    }}
+
+    if (worker_count == 0){ // none left
+        if (has_workers_left == true){ // then we need to update the UI for resort prices
+            // UI update
+
+        }
+        has_workers_left = false;
+    } else { // has workers left
+        if (has_workers_left == false){ // then we need to update the UI for regular prices
+            // UI update
+
+        }
+        has_workers_left = true;
+    }
+}
 function get_client_unit_by_id(unit_id){
     for (let unit in onscreen_units){
         if (onscreen_units[unit].unit_id == unit_id) return onscreen_units[unit];
@@ -561,12 +636,15 @@ function create_piece(action){ // this will be used in a lot of places i think
     let position = created_unit.pos[0]+","+created_unit.pos[1];
     // create tiles first so that the visual height matches up
     // then we make them visualize
+    // THIS MAY CAUSE ISSUES
+    onscreen_units[position] = created_unit;
     if (created_unit.owner == our_playerid){
         unit_see(created_unit);
+        // update pricing stats
+        
     }
     move_camera_to_coords(created_unit.pos);
 
-    onscreen_units[position] = created_unit;
     let action_tile_height = find_visual_hieght_at(position, pos_off[0], pos_off[1]);
     current_action = { type: create_unit, unit: created_unit, 
         destination: new THREE.Vector3(pos_off[0], action_tile_height, pos_off[1]),
@@ -574,7 +652,6 @@ function create_piece(action){ // this will be used in a lot of places i think
         acceleraton: 0,
     };
     created_unit.mesh.position.copy(current_action.position);
-
 }
 function PROGRESS_create_piece(){
     current_action.acceleraton += unit_drop_gravity*action_speed;
@@ -595,6 +672,7 @@ function PROGRESS_create_piece(){
             }
             // finish bounce
             current_action.unit.mesh.position.copy(current_action.destination);
+
             current_action = null;
             return;
         }
@@ -645,6 +723,7 @@ function delete_unit(target_unit){
     // remove the piece from the unit list
     let target_unit_key = get_client_unit_KEY_by_id(target_unit.unit_id);
     delete onscreen_units[target_unit_key];
+    
     console.log("unit deleted");
 }
 // currently do not need to return anything from this function, as it just instaniates the unit into the game
@@ -669,7 +748,6 @@ var actions_to_commit = [];
 var is_in_action_mode = false;
 var has_recieved_actions = false;
 var last_state_was_action = false;
-//var action_active_text = document.getElementById("hud_mid");
 var action_active_bot = document.getElementById("cine_top_bar");
 var action_active_top = document.getElementById("cine_bot_bar");
 
@@ -686,7 +764,8 @@ function enable_action_mode(){
     action_active_top.classList.toggle('fade');
     action_active_bot.classList.toggle('fade');
     document.body.style.cursor = "progress";
-
+    // update timer colors
+    timer_text.style.color = time_action_color
 }
 function disable_action_mode(){
     deselect_unit(); // just as a backup
@@ -696,6 +775,8 @@ function disable_action_mode(){
     //action_active_text.style.visibility = "collapse";
     action_active_top.classList.toggle('fade');
     action_active_bot.classList.toggle('fade');
+    // update timer color
+    timer_text.style.color = time_plenty_color
     // cleanup any denied actions
     let leftovers_counter = 0;
     for (let key in queued_creation_highlights){
@@ -728,10 +809,32 @@ function disable_action_mode(){
 // //////////////////////// //
 // SERVER CALLED FUNCTIONS //
 // ////////////////////// //
+const time_plenty_color = "#ffffff";
+const time_warn_1st_color = "#ff8888";
+const time_warn_2nd_color = "#ff5b5b";
+const time_warn_3rd_color = "#ff3636";
+const time_warn_last_color = "#ff0000";
+const time_action_color = "#3f3f3f";
 function update_time(new_time, action_time){
     // occurs once a second // update the time left text & turn count
-    timer_text.innerText = Math.floor(new_time/60) + ":" + new_time%60;
-    action_text.innerText = "-".repeat(((new_time == 0)? action_time : 0 ));
+    let seconds_count = ""+(new_time%60);
+    if (seconds_count.length < 2){
+        seconds_count = "0" + seconds_count;
+    }
+    timer_text.innerText = Math.floor(new_time/60) + ":" + seconds_count;
+    // update color based on time left
+    // if action phase is active, then do not do that as we are already using the correct color
+    if (new_time == 5 || new_time == 4){
+        timer_text.style.color = time_warn_1st_color
+    }else if (new_time == 3){
+        timer_text.style.color = time_warn_2nd_color
+    }else if (new_time == 2){
+        timer_text.style.color = time_warn_3rd_color
+    }else if (new_time == 1){
+        timer_text.style.color = time_warn_last_color
+    }
+
+    //action_text.innerText = "-".repeat(((new_time == 0)? action_time : 0 ));
     // dont need this garbage because we now let players skip 
     // if (new_time <= 0 && last_state_was_action) {
     //     // check to see if we're still processing actions
@@ -803,9 +906,7 @@ function QUEUE_attack_piece(unit, target_unit){
     action_queue.push({ type: attack_unit, target: target_unit.unit_id, unit_id: unit.unit_id })
 }
 function try_place_unit_at_selected(type){
-    if (!test_whether_pos_is_occupied(selected_tile)) {
-        // we also need to test whether its in range of a worker
-        // and then grab the reference to that worker and store it so we only have one worker
+    if (valid_placement_position(selected_tile)) {
         QUEUE_create_piece(type,selected_tile);
     }
 }
@@ -816,6 +917,8 @@ function QUEUE_create_piece(type, coords){
     queued_creation_highlights[coord_str] = new_highlight;
 
     action_queue.push({ type: create_unit, pos: coords, unit: type })
+    // then calculate the price
+
 }
 function clear_units_prev_queued_move(unit_obj){
     for (let j = 0; j < action_queue.length; j++){
@@ -852,6 +955,37 @@ function test_whether_pos_is_occupied(position_arr){
     }
     return false; // no occlusions found
 }
+function valid_placement_position(position_arr){
+    if (test_whether_pos_is_occupied(selected_tile)) return false;
+    // first determine which placement mode we are in
+    // if no workers left, resort placement mode
+    if (has_workers_left){
+        // for each worker unit
+        for (let j = 0; j < onscreen_units.length; j++){
+            let curr_unit = onscreen_units[j];
+            if (curr_unit.type == unit_worker && curr_unit.owner == our_playerid){
+                // then its a worker, iterate through list of output tiles
+                for (let row = -curr_unit.attack_range; row <= curr_unit.attack_range; row++) {
+                    let items_in_this_row = ((curr_unit.attack_range*2) + 1) - Math.abs(row);
+                    let row_left_x = curr_unit.pos[0] - (curr_unit.attack_range - Math.floor(Math.abs(row)/2)) + ((Math.abs(curr_unit.pos[1]) % 2) * (Math.abs(row) % 2));
+                    for (let column = 0; column < items_in_this_row; column++) {
+                        let tile_x = row_left_x+column;
+                        // check to make sure that this isn't just the worker's position tile
+                        if (tile_x == curr_unit.pos[0] && row == 0){continue; }
+                        if (tile_x == position_arr[0] && curr_unit.pos[1]+row == position_arr[1]){
+                            return true;
+                }}}
+        }}
+    }
+    else{ // can place anywhere they can see, but for more money
+        let pos_string = position_arr[0]+','+position_arr[1];
+        if (instanced_tiles[pos_string] != null){
+            // then we can place here
+            return true;
+    }}
+    return false;
+}
+
 
 // ////////////// //
 // CLIENT INPUTS //

@@ -15,11 +15,48 @@ body {
     visibility: collapse;
 }
 
+.store{
+    position: absolute;
+    left: 15px;
+    top: 15px;
+}
+.store_item{
+    top:0px;
+    height: 75px;
+    display:inline-block;
+    box-sizing: border-box;
+    text-align: center;
+    margin: 0px;
+    padding: 5px;
+    
+    background-color: #373737;
+    /*border: 1px solid #afafaf;
+    border-radius: 2px;*/
+    color: #c0c0c0;
+
+    -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -moz-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -ms-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -o-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+}
+.store_img{
+    -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -moz-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -ms-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -o-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+
+}
+.store_item:hover {
+  background-image: linear-gradient(to right,#980000, #373737); 
+  color: white;
+}
+
 .ui {
     position: absolute;
     text-align: center;
-    border: 2px solid #960000;
-    border-radius: 2px;
+    background-color: #6f6f6f90;
     padding: 5px;
     top: 0%;
     left: 50%;
@@ -137,6 +174,7 @@ button{
 }
 .hud_right_img{
     /*margin: 5px;*/
+    margin-left: 75px;
     display: block;
     opacity: 0.75;
     width: 64px;
@@ -144,7 +182,7 @@ button{
     object-fit: cover;
 }
 .playerbox{
-    margin-right: 175px;
+    margin-right: 190px; /* 175 (controls) + 15 (margin) */
     text-align: right;
     width: 150px;
     position: absolute;

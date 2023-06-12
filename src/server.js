@@ -4,7 +4,7 @@ var max_turn_time = 10;
 var turn_time = max_turn_time;
 var max_action_time = 5;
 var action_time = max_action_time;
-
+var starting_money = 400;
 
 // /////////////////////////////////////////// //
 // DEBUG SCRIPT TO SKIP PHASES ON ENTER PRESS //
