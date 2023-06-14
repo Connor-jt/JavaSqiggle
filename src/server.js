@@ -4,7 +4,7 @@ var max_turn_time = 10;
 var turn_time = max_turn_time;
 var max_action_time = 5;
 var action_time = max_action_time;
-var starting_money = 400;
+var starting_money = 10800;
 
 // /////////////////////////////////////////// //
 // DEBUG SCRIPT TO SKIP PHASES ON ENTER PRESS //
@@ -258,7 +258,9 @@ var players = {
         connection_id: null,
         vis_units: {}, // not used on server player
         vis_tiles: {}, // not used on server player 
-        recieved_moves: null // also not used on ther server player
+        recieved_moves: null, // also not used on ther server player
+        money: 0,
+        has_workers: true,
     }
 };
 UI_addplayer(players["server"].name, players["server"].id, players["server"].color);
@@ -377,7 +379,9 @@ function recieved_data_from_client(data){
             actions_recieved: true, // so if they join mid action collection, they will not foce the game to wait
             vis_units: {}, // not used on server player
             vis_tiles: {}, // not used on server player 
-            recieved_moves: null
+            recieved_moves: null,
+            money: starting_money,
+            has_workers: true,
         }
         post_to_console("Client joined: " + get_username_of_connection(connection.peer), con_success);
         // tell everyone that a new player has joined
@@ -564,6 +568,15 @@ function commit_actions()
             console.log("[SERVER] player attempted to create unit at the position of another unit, not allowed");
             continue;
         }     
+        // we can actually use this function to preprocess the cost of the creation event
+        // which is great because having this thing only exist to reserve the slots was not epic
+        // TEST if the player has enough money
+        let buyer_player = get_user_object_from_id(all_players_actions[j].player_id);
+        if (!server_attempt_buy_unit(buyer_player, all_players_actions[j].unit)){
+            console.log("player attempted to spend more than he could afford");
+            continue;
+        }
+
         // do not assign server unit just yet, as that will allow players to spot the unit before it spawns
         //server_units[server_unit.pos[0]+','+server_unit.pos[1]] = server_unit;
         // however we need a new list of units, to make sure that spawning takes priority over other actions
@@ -783,6 +796,22 @@ function commit_actions()
     // this is how we'll beable to thin down what each client actually gets sent
     all_players_actions = [];
     queued_creates = {}; // clear queue
+    // now recount how many workers each player has, and determine if they are in resort mode or not
+    // so how we're going to handle this is simply set all players to having no workers, then simply assign true if they do have any
+    for (let key in players){
+        players[key].has_workers = false;
+    }
+    for (let key in server_units){
+        let curr_unit = server_units[key];
+        if (curr_unit.type = unit_worker){
+            // get owner and assign true
+            let owner_p = get_user_object_from_id(curr_unit.owner);
+            if (owner_p == null){
+                console.log("unowned unit detected, cannot validate if its a worker");
+                continue;
+            }
+            owner_p.has_workers = true;
+    }}
 }
 // functions to manage what each player actually sees
 function player_see_area(pplayer_object, x, y, radius){
@@ -827,7 +856,27 @@ function player_stop_seeing_area(player_object, x, y, radius){
                         delete player_object.vis_units[tile_key];
 }}}}}}
 
-
+function server_attempt_buy_unit(buying_player, unit_type){
+    // get the cost of the unit
+    let cost = 0;
+    if (buying_player.has_workers){
+        if      (unit_type == unit_worker)  cost = worker_cost;
+        else if (unit_type == unit_soldier) cost = soldier_cost;
+        else if (unit_type == unit_sniper)  cost = sniper_cost;
+        else if (unit_type == unit_tower)   cost = tower_cost;
+    } else {
+        if      (unit_type == unit_worker)  cost = worker_resort_cost;
+        else if (unit_type == unit_soldier) cost = soldier_resort_cost;
+        else if (unit_type == unit_sniper)  cost = sniper_resort_cost;
+        else if (unit_type == unit_tower)   cost = tower_resort_cost;
+    }
+    // now test whether they have enough money
+    if (buying_player.money >= cost){
+        buying_player.money-= cost;
+        return true;
+    }
+    return false;
+}
 
 function server_is_anything_in_the_way(pos_array){
     let str_position = pos_array[0]+','+pos_array[1];
@@ -896,7 +945,8 @@ function request_clients_moves(){
 // this now submits each player's queues to ONLY themselves, we aren't pooling all actions to all players
 function submit_moves_to_client(){
     for (let key in players){
-        if (players[key].connection != null){ // check to make sure this isn't the server
-            players[key].connection.send({type:SERVER_sendback_moves, content:players[key].recieved_moves});
+        let curr_player = players[key];
+        if (curr_player.connection != null){ // check to make sure this isn't the server
+            curr_player.connection.send({type:SERVER_sendback_moves, content:{moves: curr_player.recieved_moves, money: curr_player.money}});
     }}
 }

@@ -44,6 +44,7 @@ THREE.OrbitControls = function ( object, domElement ) {
 
 	var IsRotating = false;
 	var IsInterpolating = false;
+	var IsScrolling = false;
 	var destination;
 	const interpolation_speed = 1;
 	// events
@@ -137,8 +138,11 @@ THREE.OrbitControls = function ( object, domElement ) {
 		if (IsRotating) {
 			rotation_image.style.opacity = active_transparency;
 			zooming_image.style.opacity = disabled_transparency;
-		}
-		else{
+			if (timeout_obj != null){
+				scrolling_status(false);
+				clearTimeout(timeout_obj);
+				timeout_obj = null;
+		}} else{
 			rotation_image.style.opacity = inactive_transparency;
 			zooming_image.style.opacity = inactive_transparency;
 		}
@@ -147,6 +151,12 @@ THREE.OrbitControls = function ( object, domElement ) {
 		IsInterpolating = state;
 		if (IsInterpolating) movement_image.style.opacity = active_transparency;
 		else movement_image.style.opacity = inactive_transparency;
+	}
+	function scrolling_status(state){
+		if (IsScrolling == state) return; // dont need to update
+		IsScrolling = state;
+		if (IsScrolling) zooming_image.style.opacity = active_transparency;
+		else zooming_image.style.opacity = inactive_transparency;
 	}
 
 	function onMouseMove( event ) {
@@ -167,6 +177,7 @@ THREE.OrbitControls = function ( object, domElement ) {
 		document.removeEventListener( 'mouseup', onMouseUp, false );
 		rotation_status(false);
 	}
+	var timeout_obj = null;
 	function onMouseWheel(event) {
 		if (scope.enabled === false || scope.userZoom === false || IsRotating) return;
 		var delta = 0;
@@ -179,7 +190,21 @@ THREE.OrbitControls = function ( object, domElement ) {
 		if ( delta > 0 ) scale *= scope.userZoomSpeed;
 		else scale /= scope.userZoomSpeed;
 		HasMoved = true; // allow a position update next tick
+
+		// update the UI for scrolling
+		scrolling_status(true);
+		if (timeout_obj != null){
+			clearTimeout(timeout_obj);
+			timeout_obj = null;
+		}
+		timeout_obj = setTimeout(clearing_wheel_status, 150); 
 	}
+	function clearing_wheel_status(){
+		clearTimeout(timeout_obj);
+		timeout_obj = null;
+		if (!IsRotating){
+			scrolling_status(false);
+	}}
 
 	this.domElement.addEventListener( 'contextmenu', function ( event ) { event.preventDefault(); }, false );
 	//this.domElement.addEventListener( 'mousedown', onMouseDown, false );

@@ -19,9 +19,10 @@ body {
     position: absolute;
     left: 15px;
     top: 15px;
+    color: #c0c0c0;
 }
 .store_item{
-    top:0px;
+    width: 65px;
     height: 75px;
     display:inline-block;
     box-sizing: border-box;
@@ -32,7 +33,6 @@ body {
     background-color: #373737;
     /*border: 1px solid #afafaf;
     border-radius: 2px;*/
-    color: #c0c0c0;
 
     -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
     -moz-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
@@ -46,17 +46,33 @@ body {
     -ms-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
     -o-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
     filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
-
 }
 .store_item:hover {
   background-image: linear-gradient(to right,#980000, #373737); 
   color: white;
 }
+.store_side_panel{
+    
+    position: absolute;
+    left: 291px;
+    top: 15px;
+    background-color: #373737;
+    box-sizing: border-box;
+    height: 75px;
+    padding: 5px;
+    padding-top: 10px;
+
+    
+    -webkit-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -moz-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -ms-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    -o-filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,25));
+}
 
 .ui {
     position: absolute;
     text-align: center;
-    background-color: #6f6f6f90;
     padding: 5px;
     top: 0%;
     left: 50%;
@@ -69,7 +85,7 @@ body {
 }
 .ui_money {
     color: #ffffff;
-    font-size: 22px;
+    font-size: 27px;
     font-family: 'Courier New', Courier, monospace;
 }
 .ui_m_used {
@@ -186,7 +202,7 @@ button{
     text-align: right;
     width: 150px;
     position: absolute;
-    left: calc(100% - 175px);
+    left: calc(100% - 190px);
     -webkit-transform: translate(-100%, 0%);
     transform: translate(-100%, 0%);
 }

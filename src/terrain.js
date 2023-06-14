@@ -19,7 +19,7 @@ const MAT_tile_top  = new THREE.MeshPhongMaterial({color: 0x812B30, flatShading:
 const MAT_tile_high = new THREE.MeshPhongMaterial({color: 0xAA2600, flatShading: true });
 const MAT_tile_mid  = new THREE.MeshPhongMaterial({color: 0xE76300, flatShading: true });
 const MAT_tile_low  = new THREE.MeshPhongMaterial({color: 0xD43A00, flatShading: true });
-const MAT_tile_bot  = new THREE.MeshPhongMaterial({color: 0xB97977, flatShading: true });
+const MAT_tile_bot  = new THREE.MeshPhongMaterial({color: 0xA04030, flatShading: true });
 
 // ////////////////// //
 // TILE HIGHLIGHTING //

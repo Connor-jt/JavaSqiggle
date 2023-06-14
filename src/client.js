@@ -121,8 +121,10 @@ function initialize(map_seed){
     }, undefined, (err) =>{
 		console.log( 'Error loading board image.' + err);
     });
-
-
+    // make the camera move to a valid position
+    move_camera_to_coords([0,0]);
+    // setup shop prices
+    update_unit_counts();
 
     animate();
 }
@@ -136,16 +138,21 @@ var queued_discover_units = {};
 
 var money = 0;
 var expenses = 0;
-var has_workers_left = false; // need to update this everytime a unit is destroyed or created
+var has_workers_left = null; // need to update this everytime a unit is destroyed or created
+// inital as null so it has neither state when we start the match (we will call it on init)
+function apply_purchase(target_unit){
+    let unit_cost = match_unit_type_to_price(target_unit.type);
+    update_money_counter(money - unit_cost);
+}
 function update_money_counter(new_value){
     money = new_value;
     money_text.innerText = "$" + money;
 }
-function apply_expense(target_unit, is_detraction){
-    let unit_cost = 0;
+function apply_expense(unit_type, is_detraction){
+    let unit_cost = match_unit_type_to_price(unit_type);
 
     if (is_detraction) unit_cost *= -1;
-    update_expenses_counter(expenses - unit_cost);
+    update_expenses_counter(expenses + unit_cost);
 }
 function update_expenses_counter(new_value){
     expenses = new_value;
@@ -156,43 +163,70 @@ function update_expenses_counter(new_value){
         expenses_text.innerText = "-" + expenses;
     }
 }
-function get_cost_of_unit(){
+function match_unit_type_to_price(unit_type){
     if (has_workers_left){ // according to this logic we must only ever update worker count after action mode is disabled
-        if      (target_unit.type == unit_worker)  unit_cost = worker_cost;
-        else if (target_unit.type == unit_soldier) unit_cost = soldier_cost;
-        else if (target_unit.type == unit_sniper)  unit_cost = sniper_cost;
-        else if (target_unit.type == unit_tower)   unit_cost = tower_cost;
+        if      (unit_type == unit_worker)  return worker_cost;
+        else if (unit_type == unit_soldier) return soldier_cost;
+        else if (unit_type == unit_sniper)  return sniper_cost;
+        else if (unit_type == unit_tower)   return tower_cost;
     } else {
-        if      (target_unit.type == unit_worker)  unit_cost = worker_resort_cost;
-        else if (target_unit.type == unit_soldier) unit_cost = soldier_resort_cost;
-        else if (target_unit.type == unit_sniper)  unit_cost = sniper_resort_cost;
-        else if (target_unit.type == unit_tower)   unit_cost = tower_resort_cost;
-        
+        if      (unit_type == unit_worker)  return worker_resort_cost;
+        else if (unit_type == unit_soldier) return soldier_resort_cost;
+        else if (unit_type == unit_sniper)  return sniper_resort_cost;
+        else if (unit_type == unit_tower)   return tower_resort_cost;
     }
+    return 0; // this should never occur
 }
-function update_workersleft_status(){
+
+const regular_price_tile_color = "#373737ff";
+const resort_price_tile_color = "#37373740";
+
+const regular_price_color = "#c0c0c0";
+const resort_price_color = "#ffa0a0";
+function update_unit_counts(){
     // count the workers
-    let worker_count = 0;
+    let workers = 0;
+    let friendlies = 0;
+    let enemies = 0;
     for (let key in onscreen_units){
         let curr_unit = onscreen_units[key];
-        if (curr_unit.owner == our_playerid && curr_unit.type == unit_worker){
-            worker_count += 1;
+        // friendly or not
+        if (curr_unit.owner == our_playerid){
+            friendlies += 1;
+            if (curr_unit.type == unit_worker){
+                workers += 1;
+        }}else { // eneny
+            enemies += 1;
     }}
-
-    if (worker_count == 0){ // none left
-        if (has_workers_left == true){ // then we need to update the UI for resort prices
-            // UI update
-
+    // update the unit count displays
+    document.getElementById("friendly_counter").innerHTML = "" + friendlies;
+    document.getElementById("enemy_counter").innerHTML = "" + enemies;
+    // then update the workers left
+    if (workers == 0){ // none left
+        if (has_workers_left != false){ // then we need to update the UI for resort prices
+            // UI update text colors
+            document.getElementById("store").style["color"] = resort_price_color;
+            // UI update costs
+            document.getElementById("worker_price").innerHTML = "$" + worker_resort_cost;
+            document.getElementById("soldier_price").innerHTML = "$" + soldier_resort_cost;
+            document.getElementById("sniper_price").innerHTML = "$" + sniper_resort_cost;
+            document.getElementById("tower_price").innerHTML = "$" + tower_resort_cost;
         }
         has_workers_left = false;
     } else { // has workers left
-        if (has_workers_left == false){ // then we need to update the UI for regular prices
+        if (has_workers_left != true){ // then we need to update the UI for regular prices
+            // UI update text colors
+            document.getElementById("store").style["color"] = regular_price_color;
             // UI update
-
+            document.getElementById("worker_price").innerHTML = "$" + worker_cost;
+            document.getElementById("soldier_price").innerHTML = "$" + soldier_cost;
+            document.getElementById("sniper_price").innerHTML = "$" + sniper_cost;
+            document.getElementById("tower_price").innerHTML = "$" + tower_cost;
         }
         has_workers_left = true;
     }
 }
+
 function get_client_unit_by_id(unit_id){
     for (let unit in onscreen_units){
         if (onscreen_units[unit].unit_id == unit_id) return onscreen_units[unit];
@@ -205,9 +239,9 @@ function get_client_unit_KEY_by_id(unit_id){
     }
     return null;
 }
-
+// UNUSED + WAS MAKING ERRORS
 function does_unit_exist(query_unit_id){
-    for (j = 0; j < onscreen_units.length; j++){
+    for (let j in onscreen_units){
         if (onscreen_units[j].unit_id == query_unit_id) return true;
     } return false;
 }
@@ -641,7 +675,7 @@ function create_piece(action){ // this will be used in a lot of places i think
     if (created_unit.owner == our_playerid){
         unit_see(created_unit);
         // update pricing stats
-        
+        apply_purchase(created_unit);
     }
     move_camera_to_coords(created_unit.pos);
 
@@ -745,6 +779,7 @@ function create_piece_at(type, unit_id, coords, owner_id){
 
 
 var actions_to_commit = [];
+var server_verified_moners = -9876; // hopefully we never see this value printed ingame
 var is_in_action_mode = false;
 var has_recieved_actions = false;
 var last_state_was_action = false;
@@ -799,12 +834,17 @@ function disable_action_mode(){
     if (leftovers_counter > 0){
         console.log("[CLIENT] there were " + leftovers_counter + " denied actions, cleared")
     }
+    // since we cleared all moves, reset the expense counter to 0
+    update_expenses_counter(0);
+    // and then make sure we set our money to whatever the server told us
+    update_money_counter(server_verified_moners);
     // then we try and select the unit that we're hovered over at the moment
     // make sure we serlect them after cleaning up the highlights
     select_unit_at(selected_tile);
 
     update_cursor_type(); // so if we dont move cams, it'll still update
-
+    // finally update the UI for the store
+    update_unit_counts();
 }
 // //////////////////////// //
 // SERVER CALLED FUNCTIONS //
@@ -918,7 +958,7 @@ function QUEUE_create_piece(type, coords){
 
     action_queue.push({ type: create_unit, pos: coords, unit: type })
     // then calculate the price
-
+    apply_expense(type, false);
 }
 function clear_units_prev_queued_move(unit_obj){
     for (let j = 0; j < action_queue.length; j++){
@@ -961,8 +1001,8 @@ function valid_placement_position(position_arr){
     // if no workers left, resort placement mode
     if (has_workers_left){
         // for each worker unit
-        for (let j = 0; j < onscreen_units.length; j++){
-            let curr_unit = onscreen_units[j];
+        for (let key in onscreen_units){
+            let curr_unit = onscreen_units[key];
             if (curr_unit.type == unit_worker && curr_unit.owner == our_playerid){
                 // then its a worker, iterate through list of output tiles
                 for (let row = -curr_unit.attack_range; row <= curr_unit.attack_range; row++) {
@@ -1163,14 +1203,25 @@ function move_camera_to_coords(new_coords){
     hovered_tile = new_coords;
     move_camera_to_hovered_coords();
 }
-function move_camera_to_hovered_coords(){
+function move_camera_to_hovered_coords(){ // aka 'goto'
     selected_tile = hovered_tile; // note down where the selected tile now is
     let _pos_off = get_location_offset(hovered_tile[0], hovered_tile[1]);
     let coords_Str = hovered_tile[0]+","+hovered_tile[1];
     let _height = find_visual_hieght_at(coords_Str, _pos_off[0], _pos_off[1])
     controls.goto_offset(_pos_off[0], _pos_off[1], _height+camera_height_above_tile);
     hightlight_selected_tile(_pos_off[0], _pos_off[1], _height); 
-
+    // check whether or not we can place here
+    if (valid_placement_position(selected_tile)){
+        document.getElementById("s_pan_1").style["background-color"] = regular_price_tile_color;
+        document.getElementById("s_pan_2").style["background-color"] = regular_price_tile_color;
+        document.getElementById("s_pan_3").style["background-color"] = regular_price_tile_color;
+        document.getElementById("s_pan_4").style["background-color"] = regular_price_tile_color;
+    } else { // disable the store
+        document.getElementById("s_pan_1").style["background-color"] = resort_price_tile_color;
+        document.getElementById("s_pan_2").style["background-color"] = resort_price_tile_color;
+        document.getElementById("s_pan_3").style["background-color"] = resort_price_tile_color;
+        document.getElementById("s_pan_4").style["background-color"] = resort_price_tile_color;
+    }
 }
 function interact_with_selected_tile(){
     // if theres a unit here, select them
@@ -1259,6 +1310,8 @@ function client_keydown(event){
                     let curr_action = action_queue[j];
                     // if the position matches, then thats our event
                     if (curr_action.type == create_unit && curr_action.pos[0] == selected_tile[0] && curr_action.pos[1] == selected_tile[1] ){
+                        // visual refund for creation 
+                        apply_expense(curr_action.unit, true);
                         // cleanup highlight
                         scene.remove(test_tile);
                         delete queued_creation_highlights[selected_coord_str];
@@ -1351,7 +1404,8 @@ function recieved_packet_from_server(data){
         // now pre process some of those actions
         // aka, load in all the discover actions
         // as well as remove them from the queue entirely, so we dont go crazy figuring out why we skip some actions occasionally
-        actions_to_commit = data.content;
+        actions_to_commit = data.content['moves'];
+        server_verified_moners = data.content['money'];
         for (let j = 0; j < actions_to_commit.length; j++){
             let curr_Action = actions_to_commit[j];
             if (curr_Action.type == discover_unit){
