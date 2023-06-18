@@ -83,12 +83,15 @@
             </div>
 
             <!-- CHAT TEXT BOX -->
-            <div class="chatbox">
+            <div id="chat_max" class="chatbox">
                 <div class="chatfield" id="chatbox_field">
                 </div>
                 <input type="text" onkeydown="messagebox_keydown(event);" placeholder="Enter Message.." id="client_message_field" style="width: 235px; margin: 0px;">
                 <button onclick="send_message_as_client();" style="margin: 0px;">send</button>
+                <button onclick="minimize_chat();" style="margin: 0px;">V</button>
             </div>
+            <button type="button" id="chat_min" class="chat_min"  onclick="expand_chat();">
+            </button>
         </div>
 
         <!-- JOINING SERVER UI-->

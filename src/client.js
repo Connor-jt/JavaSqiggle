@@ -139,6 +139,8 @@ var queued_discover_units = {};
 var money = 0;
 var expenses = 0;
 var has_workers_left = null; // need to update this everytime a unit is destroyed or created
+
+var is_auto_attacking = false;
 // inital as null so it has neither state when we start the match (we will call it on init)
 function apply_purchase(target_unit){
     let unit_cost = match_unit_type_to_price(target_unit.type);
@@ -239,12 +241,12 @@ function get_client_unit_KEY_by_id(unit_id){
     }
     return null;
 }
-// UNUSED + WAS MAKING ERRORS
+/*// UNUSED + WAS MAKING ERRORS
 function does_unit_exist(query_unit_id){
     for (let j in onscreen_units){
         if (onscreen_units[j].unit_id == query_unit_id) return true;
     } return false;
-}
+}*/
 function does_unit_exist_at(x, y){
     let current_coords = x + ',' + y;
     let unit = onscreen_units[current_coords];
@@ -284,6 +286,250 @@ function unit_stop_seeing(unit, position){
         }else{
             console.log("instructed to delete unit that does not exist");
 }}}
+// NEVER RUN ANY OF THESE IN ACTION MODE
+function unit_set_roam_mode(unit){
+    unit_set_default_mode(unit);
+    unit.mode = umode_roam;
+    unit_mode_run(unit); // destination will be calculated in here
+}
+function unit_set_aggressive_mode(unit){
+    unit_set_default_mode(unit);
+    unit.mode = umode_destination;
+    unit_mode_run(unit); // destination will be calculated in here
+}
+function unit_set_follow_mode(unit, target){
+    unit_set_default_mode(unit);
+    unit.mode = umode_follow;
+    unit.target_id = target.unit_id;
+    unit_mode_run(unit);
+}
+function unit_set_destination_mode(unit, dest_arr){
+    unit_set_default_mode(unit);
+    unit.mode = umode_destination;
+    unit.dest = dest_arr;
+    unit_mode_run(unit);
+}
+function unit_set_default_mode(unit){ // aka cancel
+    unit.mode = umode_none;
+    unit.target_id = null;
+    unit.dest = null;
+    unit_hide_objective(unit);
+}
+
+
+function unit_mode_run(unit){
+    // if we aren't in a special mode or auto attack, skip so we dont create a tile list each time
+    if (unit.mode == umode_none && !is_auto_attacking) return;
+    // first cancel the previously allocated move
+    clear_units_prev_queued_move(unit); // i feel like it might be a bad idea to constantly unqueue moves each turn start
+    // create this once, and not for each of those things, then parse the list into those functions
+    let tiles_list = list_all_tiles_in_unit_range(x, y, outer_radius, inner_radius, visible_units);
+    // we also want to check if we have auto attacks on
+    if (is_auto_attacking){
+        for (let key in tiles_list.unit){
+            let curr_unit = onscreen_units[key];
+            if (curr_unit == null){
+                console.log("unit said to be on tile but not found: " + tiles_list.unit[key])
+                continue;
+            }
+            if (curr_unit.owner != our_playerid){
+                // then we found a target to auto attack
+                QUEUE_attack_piece(unit, curr_unit);
+                return; // we can skip the rest of this section now
+    }}}
+    // and if so, then apply the auto attack move, instead of running them mode move
+    if (unit.mode == umode_none) return;
+    if (unit.mode == umode_roam){
+        unit_mode_run_roam(unit);
+    } else if (unit.mode == umode_aggressive){
+        unit_mode_run_aggressive(unit);
+    } else if (unit.mode == umode_follow){
+        unit_mode_run_follow(unit);
+    } else if (unit.mode == umode_destination){
+        unit_mode_run_destination(unit);
+}}
+
+// MAKE SURE ALL OF THESE STORE THE OUTPUT DEST VALUE, SO WE CAN SEE WHERE THEY ARE GOING
+const roam_outter_dist = 10;
+const roam_min_dist = 3;
+function unit_mode_run_roam(unit, tiles){
+    // basically calculate a random point for this unit to go to and apply destination mode
+    if (unit.dest != null){
+        if (unit.pos[0] == unit.dest[0] && unit.pos[1] == unit.dest[1]){
+            unit.dest = null; //location reached, next location
+    }}
+    if (unit.dest == null){
+        // then find a new target position with rand numbers
+        let x_offset = (roam_min_dist + Math.floor(Math.random() * roam_outter_dist)) * ((Math.floor(Math.random()*2)*2)-1);
+        let y_offset = (roam_min_dist + Math.floor(Math.random() * roam_outter_dist)) * ((Math.floor(Math.random()*2)*2)-1);
+        unit.dest = [unit.pos[0]+x_offset, unit.pos[1]+y_offset];
+    }
+    // then queue the move to action
+    let closest_tile = return_closest_reachable_tile(unit, tiles, null);
+    if (closest_tile != null) {
+        if (closest_tile === true){ // reached destination, we'll set a new one next time
+            QUEUE_move_piece(unit, unit.dest); 
+        }else if (closest_tile === false){ // this shouldn't happen as we'll check before to see if we're on the spot
+            console.log("somehow we are already on the tile that we're supposed to go to (roam)");
+            unit_set_default_mode(unit);
+        }else { // then we actually found a tile
+            QUEUE_move_piece(unit, closest_tile); 
+}}}
+function unit_mode_run_aggressive(unit, tiles){
+    // check whether any units are onscreen, if there are chase them
+    // if none go for objectives // NOT IMPLEMENTED YET
+
+    // we actually want the units to constantly chase the closest units
+    // let targ_unit = get_client_unit_by_id(unit.target_id);
+    unit.target_id = null; // for bugs sake, this probably fixes something
+    let is_attacking = false;
+    let unit_pos_off = get_location_offset(unit.pos[0], unit.pos[1]);
+
+    let closest_length = null;
+    let closest_unit = null;
+    for (let key in onscreen_units){
+        let curr_unit = onscreen_units[key];
+        if (curr_unit.owner != our_playerid){
+            let target_pos_off = get_location_offset(curr_unit.pos[0], curr_unit.pos[1]);
+            // measure the distance between unit and dest
+            let unit_dist = distance_between_points(unit_pos_off, target_pos_off); 
+            if (closest_length == null || unit_dist < closest_length){
+                closest_length = unit_dist;
+                closest_unit = curr_unit;
+    }}}
+
+    if (closest_unit == null){
+        // then enter objective mode
+        unit.dest = [0,0]; // we're pretending this location is the objective for the time being
+    } else { // they're still up, grab their latest destination
+        unit.dest = closest_unit.pos.slice(0);
+        unit.target_id = closest_unit.unit_id;
+        is_attacking = true;
+    }
+
+    // determine if we are moving somewhere or attack-chasing
+    let closest_tile = null;
+    if (is_attacking){ //  enemy
+        closest_tile = return_closest_reachable_tile(unit, tiles, targ_unit);
+    } else { // objective
+        closest_tile = return_closest_reachable_tile(unit, tiles, null);
+    }
+
+    if (closest_tile != null) {
+        if (closest_tile === true){
+            if (is_attacking){
+                QUEUE_attack_piece(unit, targ_unit);
+            } else {
+                QUEUE_move_piece(unit, unit.dest); // this theoretically moves us exactly to objective point
+        }}else if (closest_tile === false){
+            // ideally, we're on the objective and we dont need to move
+            console.log("somehow we are already on the tile that we're supposed to go to (aggressive)");
+        }else { // then we actually found a tile
+            QUEUE_move_piece(unit, closest_tile); // we don need to try as we already know we can move here
+}}}
+function unit_mode_run_follow(unit, tiles){
+    // if the unit no longer exist, exit follow mode
+    let targ_unit = get_client_unit_by_id(unit.target_id);
+    if (targ_unit == null){ // then the target has died or stopped existing
+        unit_set_default_mode(unit);
+        return;
+    } else { // they're still up, grab their latest destination
+        unit.dest = targ_unit.pos.slice(0);
+    }
+    // determine if we are following or attack-chasing
+    let closest_tile = null;
+    let is_attacking = false;
+    if (targ_unit.owner == our_playerid){ // friendly
+        closest_tile = return_closest_reachable_tile(unit, tiles, null);
+    } else { // enemy
+        closest_tile = return_closest_reachable_tile(unit, tiles, targ_unit);
+        is_attacking = true;
+    }
+    
+    if (closest_tile != null) {
+        if (closest_tile === true){
+            if (is_attacking){
+                QUEUE_attack_piece(unit, targ_unit);
+            } else {
+                console.log("how are we following someone and we got to the same tile as them????")
+                QUEUE_move_piece(unit, unit.dest); // we also dont need to try as we checked to make sure nothing was here
+        }}else if (closest_tile === false){
+            console.log("somehow we are already on the tile that we're supposed to go to (follow)");
+        }else { // then we actually found a tile
+            QUEUE_move_piece(unit, closest_tile); // we don need to try as we already know we can move here
+}}}
+function unit_mode_run_destination(unit, tiles){
+    // simply schedule the next closest move towards the dest
+    // if the dest is within range, revert to regular mode UNLESS its blocked, then queue next closest
+    let closest_tile = return_closest_reachable_tile(unit, tiles, null);
+    if (closest_tile != null) {
+        if (closest_tile === true){
+            // dest reached, clear mode
+            QUEUE_move_piece(unit, unit.dest); // we also dont need to try as we checked to make sure nothing was here
+            unit_set_default_mode(unit);
+        } if (closest_tile === false){
+            console.log("somehow we are already on the tile that we're supposed to go to (destination)");
+            unit_set_default_mode(unit);
+        }else { // then we actually found a tile
+            QUEUE_move_piece(unit, closest_tile); // we don need to try as we already know we can move here
+}}}
+function return_closest_reachable_tile(unit, tiles, target){ // target = attacking mode
+    // first test whether we can just reach the destination (both move and attack wise)
+    if (target != null){
+        if (tiles.unit[target.pos[0] +','+ target.pos[1]] != null){
+            return true;
+    }}else if (tiles.move[unit.pos[0] +','+ unit.pos[1]] != null){
+        if (!test_whether_pos_is_occupied(unit.pos))
+            return true;
+    }
+    // check to make sure we aren't already where we're trying to be
+    if (unit.pos[0] == unit.dest[0] && unit.pos[1] == unit.dest[1]) return false;
+
+    // if the move wasn't found to be immediately reachable, then find the next best tile to go to
+    // get the real world distance of the destination
+    let unit_pos_off = get_location_offset(unit.pos[0], unit.pos[1]);
+    let dest_pos_off = get_location_offset(unit.dest[0], unit.dest[1])
+
+    let closest_length = null;
+    let closest_key = null;
+    for (let j in tiles.move){
+        let curr_tile_arr = tiles.move[j]; 
+        if (test_whether_pos_is_occupied(curr_tile_arr)) continue; // we cant move here so dont bother
+        // find the real world position of this tile
+        let tile_pos_off = get_location_offset(curr_tile_arr[0], curr_tile_arr[1]);
+        // measure the distance between unit and dest
+        let unit_dist = distance_between_points(unit_pos_off, tile_pos_off); 
+        let dest_dist = distance_between_points(dest_pos_off, tile_pos_off); 
+        let total_dist = unit_dist + dest_dist;
+        if (closest_length == null || total_dist < closest_length){
+            closest_length = total_dist;
+            closest_key = j;
+    }}
+    if (closest_key == null){ // then we did not find a single viable tile somehow?
+        return null;
+    }
+    return tiles.move[j]; // (an array) we could actually pass back the key, because we could just use that to have both values
+}
+function distance_between_points(p1, p2){
+    return Math.sqrt((Math.pow(p2[0]-p1[0],2))+(Math.pow(p2[1]-p1[1],2)));
+}
+
+
+function unit_show_objective(unit){
+    unit_hide_objective(unit); // clear first just in case
+    if (unit.mode != umode_none){
+        let objective_pos = unit.dest;
+        unit.dest_highlight = preview_hightlight_tile(unit.dest[0], unit.dest[1], objective_pos);
+    }
+}
+function unit_hide_objective(unit){
+    if (unit.dest_highlight != null){
+        scene.remove(unit.dest_highlight);
+        unit.dest_highlight = null;
+    }
+}
+
+
 function select_unit(selec_unit){
     deselect_unit();
     if (selec_unit.owner != our_playerid) return; // do not select units that we dont own
@@ -850,10 +1096,12 @@ function disable_action_mode(){
 // SERVER CALLED FUNCTIONS //
 // ////////////////////// //
 const time_plenty_color = "#ffffff";
-const time_warn_1st_color = "#ff8888";
-const time_warn_2nd_color = "#ff5b5b";
-const time_warn_3rd_color = "#ff3636";
-const time_warn_last_color = "#ff0000";
+const time_warn_5s = "#ffe0e0";
+const time_warn_4s = "#ffb0b0";
+const time_warn_3s = "#ff9090";
+const time_warn_2s = "#ff6060";
+const time_warn_1s = "#ff3030";
+const time_warn_0s = "#ff0000";
 const time_action_color = "#3f3f3f";
 function update_time(new_time, action_time){
     // occurs once a second // update the time left text & turn count
@@ -864,14 +1112,20 @@ function update_time(new_time, action_time){
     timer_text.innerText = Math.floor(new_time/60) + ":" + seconds_count;
     // update color based on time left
     // if action phase is active, then do not do that as we are already using the correct color
-    if (new_time == 5 || new_time == 4){
-        timer_text.style.color = time_warn_1st_color
+    if (new_time > 5){ // we can reset the color
+        timer_text.style.color = time_plenty_color
+    }else if (new_time == 5){
+        timer_text.style.color = time_warn_5s
+    }else if (new_time == 4){
+        timer_text.style.color = time_warn_4s
     }else if (new_time == 3){
-        timer_text.style.color = time_warn_2nd_color
+        timer_text.style.color = time_warn_3s
     }else if (new_time == 2){
-        timer_text.style.color = time_warn_3rd_color
+        timer_text.style.color = time_warn_2s
     }else if (new_time == 1){
-        timer_text.style.color = time_warn_last_color
+        timer_text.style.color = time_warn_1s
+    }else if (!is_in_action_mode && new_time == 0){
+        timer_text.style.color = time_warn_0s
     }
 
     //action_text.innerText = "-".repeat(((new_time == 0)? action_time : 0 ));
@@ -974,8 +1228,7 @@ function clear_units_prev_queued_move(unit_obj){
     }
 }
 function test_whether_pos_is_occupied(position_arr){
-    let position_string = selected_tile[0] + ',' + selected_tile[1];
-    let unit = onscreen_units[position_string];
+    let unit = onscreen_units[position_arr[0] + ',' + position_arr[1]];
     if (unit != null) { // we also need a way of allowing units to move to a position that another unit is queued to leave
         return true;
     }
@@ -984,16 +1237,10 @@ function test_whether_pos_is_occupied(position_arr){
         if (action_queue[j].type == create_unit){
             if (action_queue[j].pos[0] == position_arr[0] && action_queue[j].pos[1] == position_arr[1]){
                 return true;
-            }
-        }else if (action_queue[j].type == move_unit){
+        }}else if (action_queue[j].type == move_unit){
             if (action_queue[j].pos[0] == position_arr[0] && action_queue[j].pos[1] == position_arr[1]){
                 return true;
-            }
-        }else{ // attack unit // cant occur in the same spot?
-
-        }
-    }
-    return false; // no occlusions found
+    }}} return false; // no occlusions found
 }
 function valid_placement_position(position_arr){
     if (test_whether_pos_is_occupied(selected_tile)) return false;
@@ -1326,7 +1573,22 @@ function messagebox_keydown(event){
     }
 }
 
-
+// //////////////////////////////// //
+// CHAT FUNCTIONALITY INTERACTIONS //
+// ////////////////////////////// //
+function minimize_chat(){
+    document.getElementById("chat_max").style.visibility = "collapse";
+    document.getElementById("chat_min").style.visibility = "visible";
+}
+function expand_chat(){
+    document.getElementById("chat_min").style.visibility = "collapse";
+    document.getElementById("chat_max").style.visibility = "visible";
+}
+function min_chat_message(message, color){
+    let min_caht = document.getElementById("chat_min");
+    min_caht.innerHTML = message;
+    min_caht.style.color = color;
+}
 
 // /////////////////////////// //
 // NETWORKING IMPORTANT STUFF //
@@ -1391,6 +1653,8 @@ function recieved_packet_from_server(data){
     else if (data.type == SERVER_message){
         let sender_player = return_player_from_id(data.content.user_id);
         UI_add_message(data.content.text, sender_player.color);
+        // and then append to client min chat
+        min_chat_message(data.content.text, sender_player.color);
     }
     else if (data.type == SERVER_time_update){
         update_time(data.content.turn_time, data.content.action_time);

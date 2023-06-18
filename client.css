@@ -159,14 +159,25 @@ button{
     -webkit-transform: translate(-50%, -50%);
     transform: translate(-50%, -50%);
 }
-.chatbox{
-    background-color: #d7d7d730;
+
+.chat_min{
+    visibility: collapse;
+    color: white;
+    text-align: left;
+    width: 295px;
+    position: absolute;
+    bottom: 0px;
+    margin: 15px;
+    background-color: transparent;
+    border: transparent;
+}
+.chat_min:hover{
     border: 2px solid #bfbfbf50;
-    border-radius: 3px;
-    -moz-border-radius: 3px;
+}
+.chatbox{
     padding: 5px;
 
-    width: 295px;
+    width: 321px;
     
     position: absolute;
     top: 100%;
@@ -174,6 +185,7 @@ button{
     transform: translate(0%, -100%);
 }
 .chatfield{
+    background-color: #50505050;
     margin-bottom: 5px;
     max-height: 200px;
     overflow-y: scroll;
