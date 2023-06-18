@@ -47,10 +47,12 @@ const MAT_action_attack_highlight = new THREE.MeshBasicMaterial({color: 0xffef4f
 const MAT_preview_move_highlight = new THREE.MeshBasicMaterial({color: 0xff5fff5f });
 const MAT_preview_range_highlight = new THREE.MeshBasicMaterial({color: 0xff5f5fff });
 const MAT_preview_attack_highlight = new THREE.MeshBasicMaterial({color: 0xffff4f4f });
+const MAT_preview_objective_highlight = new THREE.MeshBasicMaterial({color: 0xff4fffff });
 
 const pointer_tile_size_multiplier = 0.8;
 const pointer_tile_height = 0.85;
 const action_tile_size_multiplier = 1.1;
+const objective_multiplier = 1.05;
 function action_hightlight_tile(x, y, type, unit_type){ // unit_type is only used when we 
     // create highlight item if not created already
     let action_highlight_tile;
@@ -71,17 +73,27 @@ function action_hightlight_tile(x, y, type, unit_type){ // unit_type is only use
     action_highlight_tile.position.set(pos_off[0], find_visual_hieght_at(x+","+y, pos_off[0], pos_off[1])+highlight_middle_hieght, pos_off[1]);
     return action_highlight_tile;
 }
-function preview_hightlight_tile(x, y, is_occupied, is_inner_radius){
+const preview_move = 0;
+const preview_range = 1;
+const preview_enemy = 2;
+const preview_friendly = 3;
+const preview_objective = 4;
+
+function preview_hightlight_tile(x, y, type){
     // create highlight item if not created already
     let output_tile;
-    if (is_occupied){
+    let scale_hieght = highlight_hieght;
+    if (type == preview_enemy){
         output_tile = new THREE.Mesh(geometry, MAT_preview_attack_highlight);
-    }else if (is_inner_radius){
+    }else if (type == preview_move){
         output_tile = new THREE.Mesh(geometry, MAT_preview_move_highlight);
-    }else{
+    }else if (type == preview_range){
         output_tile = new THREE.Mesh(geometry, MAT_preview_range_highlight);
+    }else if (type == preview_objective){
+        output_tile = new THREE.Mesh(geometry, MAT_preview_objective_highlight);
+        scale_hieght *= objective_multiplier;
     }
-    output_tile.scale.set(1, highlight_hieght, 1); // set height
+    output_tile.scale.set(1, scale_hieght, 1); // set height
     scene.add(output_tile);
     let pos_off = get_location_offset(x, y);
     output_tile.position.set(pos_off[0], find_visual_hieght_at(x+","+y, pos_off[0], pos_off[1])+highlight_middle_hieght, pos_off[1]);
@@ -196,6 +208,30 @@ function delete_tile_circle(x, y, radius, delete_list){
 function preview_moves_at(x, y, outer_radius, inner_radius, visible_units){
     preview_clear_moves();
     // do the circle select thing at
+    // 
+    // 
+    let tiles_list = list_all_tiles_in_unit_range(x, y, outer_radius, inner_radius, visible_units);
+    // process unit tiles
+    for (let j in tiles_list.unit){
+        let vis_tile = tiles_list.unit_list[j];
+        range_visual_tiles[position_string] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_enemy);
+    }
+    // process range tiles
+    for (let j in tiles_list.range){
+        let vis_tile = tiles_list.unit_list[j];
+        range_visual_tiles[position_string] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_range);
+    }
+    // process movement tiles
+    for (let j in tiles_list.move){
+        let vis_tile = tiles_list.unit_list[j];
+        movement_visual_tiles[position_string] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_move);
+    }
+}
+function list_all_tiles_in_unit_range(x, y, outer_radius, inner_radius, visible_units){
+    let move_tile_list = {};
+    let range_tile_list = {};
+    let unit_list = {};
+
     for (let row = -outer_radius; row <= outer_radius; row++) {
         // test whether the row is out of range
         let is_inner_radius = (Math.abs(row) <= inner_radius);
@@ -213,14 +249,27 @@ function preview_moves_at(x, y, outer_radius, inner_radius, visible_units){
             // test whether a unit occupies the target tile, and get the string to write the thingo at
             let current_x = row_left_x + column;
             let current_y = y + row;
-            let position_string = current_x +"," + current_y;
+            if (current_x == x && current_y == y) continue; // we do not want the tile that our piece is on
+            
+            let position_string = current_x + "," + current_y;
             let is_this_position_inner = is_inner_radius;
             if (is_inner_radius) {
                 is_this_position_inner = ((current_x >= inner_row_left_x) && (current_x < inner_row_left_x+inner_items_in_this_row)) ;
             }
-            if (is_this_position_inner) movement_visual_tiles[position_string] = preview_hightlight_tile(current_x, current_y, (visible_units[position_string] != null), true);
-            else                        range_visual_tiles[position_string] = preview_hightlight_tile(current_x, current_y, (visible_units[position_string] != null), false);
+            if (visible_units[position_string] != null){
+                unit_list[position_string] = [current_x, current_y];
+            } else if (is_this_position_inner) {
+                move_tile_list[position_string] = [current_x, current_y];
+            } else {            
+                range_tile_list[position_string] = [current_x, current_y];
+            }
         }
+    }
+
+    return {
+        move: move_tile_list,
+        range: range_tile_list,
+        unit: unit_list
     }
 }
 function preview_clear_moves(){
