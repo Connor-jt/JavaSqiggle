@@ -92,7 +92,8 @@ function initialize(map_seed){
     // ///////////// //
     controls = new THREE.OrbitControls(camera, renderer.domElement);
     controls.domElement.addEventListener( 'mousedown', client_mousedown, false );
-    window.addEventListener("keypress", client_keydown);
+    window.addEventListener("keydown", client_keydown);
+    window.addEventListener("keyup", client_keyup);
     window.addEventListener( 'pointermove', onPointerMove );
     // ///////////////// //
     // SETUP GAME BOARD // 
@@ -288,66 +289,113 @@ function unit_stop_seeing(unit, position){
 }}}
 // NEVER RUN ANY OF THESE IN ACTION MODE
 function unit_set_roam_mode(unit){
-    unit_set_default_mode(unit);
+    clear_units_prev_queued_move(currently_selected_unit);
+    unit_clear_mode(unit);
     unit.mode = umode_roam;
     unit_mode_run(unit); // destination will be calculated in here
+    unit_update_mode_ui(unit);
 }
 function unit_set_aggressive_mode(unit){
-    unit_set_default_mode(unit);
+    clear_units_prev_queued_move(currently_selected_unit);
+    unit_clear_mode(unit);
     unit.mode = umode_destination;
     unit_mode_run(unit); // destination will be calculated in here
+    unit_update_mode_ui(unit);
 }
 function unit_set_follow_mode(unit, target){
-    unit_set_default_mode(unit);
+    clear_units_prev_queued_move(currently_selected_unit);
+    unit_clear_mode(unit);
     unit.mode = umode_follow;
     unit.target_id = target.unit_id;
     unit_mode_run(unit);
+    unit_update_mode_ui(unit);
 }
 function unit_set_destination_mode(unit, dest_arr){
-    unit_set_default_mode(unit);
+    clear_units_prev_queued_move(currently_selected_unit);
+    unit_clear_mode(unit);
     unit.mode = umode_destination;
     unit.dest = dest_arr;
     unit_mode_run(unit);
+    unit_update_mode_ui(unit);
 }
-function unit_set_default_mode(unit){ // aka cancel
+function unit_clear_mode(unit){
     unit.mode = umode_none;
     unit.target_id = null;
     unit.dest = null;
     unit_hide_objective(unit);
 }
+function unit_set_default_mode(unit){ // aka cancel
+    unit_clear_mode(unit);
+    unit_update_mode_ui(unit);
+}
 
-
+const enabled_source = "resources/units_panel/active_48.png";
+const disabled_source = "resources/units_panel/inactive_48.png";
+function unit_update_mode_ui(unit){
+    // let it be known that the modes are active (aka full transparency)
+    document.getElementById("sr_mode_default").style["background-color"] = regular_price_tile_color;
+    document.getElementById("sr_mode_roam").style["background-color"] = regular_price_tile_color;
+    document.getElementById("sr_mode_aggressive").style["background-color"] = regular_price_tile_color;
+    document.getElementById("sr_mode_follow").style["background-color"] = regular_price_tile_color;
+    document.getElementById("sr_mode_destination").style["background-color"] = regular_price_tile_color;
+    // then toggle all the states accordingly
+    let none_mode_img =         document.getElementById("sr_mode_default_img");
+    let roam_mode_img =         document.getElementById("sr_mode_roam_img");
+    let aggressive_mode_img =   document.getElementById("sr_mode_aggressive_img");
+    let follow_mode_img =       document.getElementById("sr_mode_follow_img");
+    let destination_mode_img =  document.getElementById("sr_mode_destination_img");
+    none_mode_img.src = disabled_source;
+    roam_mode_img.src = disabled_source;
+    aggressive_mode_img.src = disabled_source;
+    follow_mode_img.src = disabled_source;
+    destination_mode_img.src = disabled_source;
+    if (unit.mode == umode_none){
+        none_mode_img.src = enabled_source;
+    } else if (unit.mode == umode_roam){
+        roam_mode_img.src = enabled_source;
+    } else if (unit.mode == umode_aggressive){
+        aggressive_mode_img.src = enabled_source;
+    } else if (unit.mode == umode_follow){
+        follow_mode_img.src = enabled_source;
+    } else if (unit.mode == umode_destination){
+        destination_mode_img.src = enabled_source;
+}}
 function unit_mode_run(unit){
     // if we aren't in a special mode or auto attack, skip so we dont create a tile list each time
     if (unit.mode == umode_none && !is_auto_attacking) return;
     // first cancel the previously allocated move
     clear_units_prev_queued_move(unit); // i feel like it might be a bad idea to constantly unqueue moves each turn start
     // create this once, and not for each of those things, then parse the list into those functions
-    let tiles_list = list_all_tiles_in_unit_range(x, y, outer_radius, inner_radius, visible_units);
+    let tiles_list = list_all_tiles_in_unit_range(unit.pos[0], unit.pos[1], unit.attack_range, unit.move_range, onscreen_units);
     // we also want to check if we have auto attacks on
     if (is_auto_attacking){
-        for (let key in tiles_list.unit){
-            let curr_unit = onscreen_units[key];
-            if (curr_unit == null){
-                console.log("unit said to be on tile but not found: " + tiles_list.unit[key])
-                continue;
-            }
-            if (curr_unit.owner != our_playerid){
-                // then we found a target to auto attack
-                QUEUE_attack_piece(unit, curr_unit);
-                return; // we can skip the rest of this section now
-    }}}
+        let in_range_target = unit_auto_attack(tiles_list);
+        if (in_range_target != null){
+            QUEUE_attack_piece(unit, in_range_target);
+            return;
+    }}
     // and if so, then apply the auto attack move, instead of running them mode move
     if (unit.mode == umode_none) return;
     if (unit.mode == umode_roam){
-        unit_mode_run_roam(unit);
+        unit_mode_run_roam(unit, tiles_list);
     } else if (unit.mode == umode_aggressive){
-        unit_mode_run_aggressive(unit);
+        unit_mode_run_aggressive(unit, tiles_list);
     } else if (unit.mode == umode_follow){
-        unit_mode_run_follow(unit);
+        unit_mode_run_follow(unit, tiles_list);
     } else if (unit.mode == umode_destination){
-        unit_mode_run_destination(unit);
+        unit_mode_run_destination(unit, tiles_list);
 }}
+function unit_auto_attack(tiles_list){
+    for (let key in tiles_list.unit){
+        let curr_unit = onscreen_units[key];
+        if (curr_unit == null){
+            console.log("unit said to be on tile but not found: " + tiles_list.unit[key])
+        }else if (curr_unit.owner != our_playerid){
+            // then we found a target to auto attack
+            return curr_unit; // we can skip the rest of this section now
+    }} 
+    return null;
+}
 
 // MAKE SURE ALL OF THESE STORE THE OUTPUT DEST VALUE, SO WE CAN SEE WHERE THEY ARE GOING
 const roam_outter_dist = 10;
@@ -478,8 +526,8 @@ function return_closest_reachable_tile(unit, tiles, target){ // target = attacki
     if (target != null){
         if (tiles.unit[target.pos[0] +','+ target.pos[1]] != null){
             return true;
-    }}else if (tiles.move[unit.pos[0] +','+ unit.pos[1]] != null){
-        if (!test_whether_pos_is_occupied(unit.pos))
+    }}else if (tiles.move[unit.dest[0] +','+ unit.dest[1]] != null){
+        if (!test_whether_pos_is_occupied(unit.dest))
             return true;
     }
     // check to make sure we aren't already where we're trying to be
@@ -487,7 +535,6 @@ function return_closest_reachable_tile(unit, tiles, target){ // target = attacki
 
     // if the move wasn't found to be immediately reachable, then find the next best tile to go to
     // get the real world distance of the destination
-    let unit_pos_off = get_location_offset(unit.pos[0], unit.pos[1]);
     let dest_pos_off = get_location_offset(unit.dest[0], unit.dest[1])
 
     let closest_length = null;
@@ -497,18 +544,16 @@ function return_closest_reachable_tile(unit, tiles, target){ // target = attacki
         if (test_whether_pos_is_occupied(curr_tile_arr)) continue; // we cant move here so dont bother
         // find the real world position of this tile
         let tile_pos_off = get_location_offset(curr_tile_arr[0], curr_tile_arr[1]);
-        // measure the distance between unit and dest
-        let unit_dist = distance_between_points(unit_pos_off, tile_pos_off); 
+        // measure the distance between tile and dest
         let dest_dist = distance_between_points(dest_pos_off, tile_pos_off); 
-        let total_dist = unit_dist + dest_dist;
-        if (closest_length == null || total_dist < closest_length){
-            closest_length = total_dist;
+        if (closest_length == null || dest_dist < closest_length){
+            closest_length = dest_dist;
             closest_key = j;
     }}
     if (closest_key == null){ // then we did not find a single viable tile somehow?
         return null;
     }
-    return tiles.move[j]; // (an array) we could actually pass back the key, because we could just use that to have both values
+    return tiles.move[closest_key]; // (an array) we could actually pass back the key, because we could just use that to have both values
 }
 function distance_between_points(p1, p2){
     return Math.sqrt((Math.pow(p2[0]-p1[0],2))+(Math.pow(p2[1]-p1[1],2)));
@@ -518,8 +563,7 @@ function distance_between_points(p1, p2){
 function unit_show_objective(unit){
     unit_hide_objective(unit); // clear first just in case
     if (unit.mode != umode_none){
-        let objective_pos = unit.dest;
-        unit.dest_highlight = preview_hightlight_tile(unit.dest[0], unit.dest[1], objective_pos);
+        unit.dest_highlight = preview_hightlight_tile(unit.dest[0], unit.dest[1], preview_objective);
     }
 }
 function unit_hide_objective(unit){
@@ -537,6 +581,9 @@ function select_unit(selec_unit){
     // TODO: UPDATE THIS TO USE UNIT COORDS
     preview_moves_at(selected_tile[0], selected_tile[1], currently_selected_unit.attack_range, currently_selected_unit.move_range, onscreen_units);
     // we also need to display any highgluight moves that this unit muight have
+    unit_show_objective(selec_unit);
+    // aka objective moves
+    unit_update_mode_ui(selec_unit);
 }
 function select_unit_at(position_Array){
     let current_coords = position_Array[0] + ',' + position_Array[1];
@@ -546,8 +593,23 @@ function select_unit_at(position_Array){
     }
 }
 function deselect_unit(){
+    if (currently_selected_unit == null) return;
+    unit_hide_objective(currently_selected_unit);
     currently_selected_unit = null;
     preview_clear_moves();
+    // disable visual for each
+    document.getElementById("sr_mode_default").style["background-color"] = resort_price_tile_color;
+    document.getElementById("sr_mode_roam").style["background-color"] = resort_price_tile_color;
+    document.getElementById("sr_mode_aggressive").style["background-color"] = resort_price_tile_color;
+    document.getElementById("sr_mode_follow").style["background-color"] = resort_price_tile_color;
+    document.getElementById("sr_mode_destination").style["background-color"] = resort_price_tile_color;
+    // disable indicators for each
+    document.getElementById("sr_mode_default_img").src = disabled_source;
+    document.getElementById("sr_mode_roam_img").src = disabled_source;
+    document.getElementById("sr_mode_aggressive_img").src = disabled_source;
+    document.getElementById("sr_mode_follow_img").src = disabled_source;
+    document.getElementById("sr_mode_destination_img").src = disabled_source;
+    
 }
 function calculate_realworld_position_of(unit){
     let pos_string = unit.pos[0]+","+unit.pos[1];
@@ -1046,6 +1108,7 @@ function enable_action_mode(){
     action_active_bot.classList.toggle('fade');
     document.body.style.cursor = "progress";
     // update timer colors
+    last_time_was_action_time = true;
     timer_text.style.color = time_action_color
 }
 function disable_action_mode(){
@@ -1056,8 +1119,6 @@ function disable_action_mode(){
     //action_active_text.style.visibility = "collapse";
     action_active_top.classList.toggle('fade');
     action_active_bot.classList.toggle('fade');
-    // update timer color
-    timer_text.style.color = time_plenty_color
     // cleanup any denied actions
     let leftovers_counter = 0;
     for (let key in queued_creation_highlights){
@@ -1075,8 +1136,7 @@ function disable_action_mode(){
             leftovers_counter++;
             create_fail_indicator(onscreen_units[key].mesh.position);
             clear_unit_highlights(onscreen_units[key]);
-        }
-    }
+    }}
     if (leftovers_counter > 0){
         console.log("[CLIENT] there were " + leftovers_counter + " denied actions, cleared")
     }
@@ -1091,6 +1151,13 @@ function disable_action_mode(){
     update_cursor_type(); // so if we dont move cams, it'll still update
     // finally update the UI for the store
     update_unit_counts();
+
+    // and then we run through our unit behaviours, so the units decide their next moves
+    for (let key in onscreen_units){
+        let current_unit = onscreen_units[key];
+        if (current_unit.owner == our_playerid){ // then we own this unit, and can auto move it
+            unit_mode_run(current_unit);
+    }}
 }
 // //////////////////////// //
 // SERVER CALLED FUNCTIONS //
@@ -1103,6 +1170,7 @@ const time_warn_2s = "#ff6060";
 const time_warn_1s = "#ff3030";
 const time_warn_0s = "#ff0000";
 const time_action_color = "#3f3f3f";
+var last_time_was_action_time = false;
 function update_time(new_time, action_time){
     // occurs once a second // update the time left text & turn count
     let seconds_count = ""+(new_time%60);
@@ -1113,6 +1181,7 @@ function update_time(new_time, action_time){
     // update color based on time left
     // if action phase is active, then do not do that as we are already using the correct color
     if (new_time > 5){ // we can reset the color
+        last_time_was_action_time = false;
         timer_text.style.color = time_plenty_color
     }else if (new_time == 5){
         timer_text.style.color = time_warn_5s
@@ -1124,7 +1193,7 @@ function update_time(new_time, action_time){
         timer_text.style.color = time_warn_2s
     }else if (new_time == 1){
         timer_text.style.color = time_warn_1s
-    }else if (!is_in_action_mode && new_time == 0){
+    }else if (!last_time_was_action_time && new_time == 0){
         timer_text.style.color = time_warn_0s
     }
 
@@ -1286,6 +1355,10 @@ var last_vec = new THREE.Vector3();
 var mouse_pos_changed = true;
 var mouse_pos_X = 0;
 var mouse_pos_Y = 0;
+
+var is_alt_down = false;
+var is_shift_down = false;
+var is_ctrl_down = false;
 // new mouse move event, only update data and not double run the movement tick
 function onPointerMove( event ) {
     mouse_pos_X = event.clientX;
@@ -1357,10 +1430,12 @@ function update_hovered_stuff(){
 }
 // we actually need to return whether a unit was visible or not, so we can update the UI pos immediately
 function update_cursor_type(){
+
     let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
     // alright lets check to see what type of cursor should be active right now
-    // if action mode, then we dont get cursor feedback on tiles
-    if (is_in_action_mode && !has_recieved_actions) {
+    // if action mode, then we dont get cursor feedback on tiles // also alt mode means we dont pickup anything
+    if (is_alt_down || (is_in_action_mode && !has_recieved_actions)) {
+        if (is_alt_down && !(is_in_action_mode && !has_recieved_actions)){ document.body.style.cursor = "auto"; } // alt mode neads clear icon
         // we still need to check if someone was there
         let hovered_over_unit_for_ui = onscreen_units[offset_str];
         if (hovered_over_unit_for_ui != null){
@@ -1370,8 +1445,6 @@ function update_cursor_type(){
         toggle_stat_display(false, null);
         return false; // no cursor types in action mode
     }
-    
-
 
     let known_tile_test = instanced_tiles[offset_str]
     if (known_tile_test == null){ // tile is not known
@@ -1389,12 +1462,21 @@ function update_cursor_type(){
         toggle_stat_display(true, hovered_over_unit);
         // if its an enemy
         if (hovered_over_unit.owner != our_playerid){
-            if (range_tile != null || move_tile != null){ // in attack range
-                document.body.style.cursor = "alias";
-                return true;
-            }
+            if (currently_selected_unit != null){
+                if (range_tile != null || move_tile != null){ // in attack range
+                    document.body.style.cursor = "alias";
+                    return true;
+                } // otherwise we can set to follow this unit if ctrl mode
+                if (is_ctrl_down){
+                    document.body.style.cursor = "crosshair";
+                    return true;
+            }} // if not in control mode and not inrange, they are out of range
             // not in range
             document.body.style.cursor = "no-drop";
+            return true;
+        }
+        if (currently_selected_unit != null && is_ctrl_down){
+            document.body.style.cursor = "cell";
             return true;
         }
         // elses its friendly
@@ -1402,12 +1484,12 @@ function update_cursor_type(){
         return true;
     }
     toggle_stat_display(false, null);
-    if (range_tile != null){
-        document.body.style.cursor = "zoom-out";
-        return false;
-    }
-    if (move_tile != null){
-        document.body.style.cursor = "move";
+    if (currently_selected_unit != null){
+        if (move_tile != null){
+            document.body.style.cursor = "move";
+            return false;
+        } // else we assume the tile is otherwise empty and we can proceed with a goto
+        document.body.style.cursor = "row-resize";
         return false;
     }
 
@@ -1445,7 +1527,6 @@ function game_speed_changed(){
 // /////////////////////////////// //
 // ORIENTATION LOCATION FUNCTIONS //
 // ///////////////////////////// //
-
 function move_camera_to_coords(new_coords){
     hovered_tile = new_coords;
     move_camera_to_hovered_coords();
@@ -1475,45 +1556,62 @@ function interact_with_selected_tile(){
     // this will inadvertedly make us automatically select units that we create
     // unless we create multiple in the same go, then it will select the last one, or probably the first one actually, after everything is done
     let coords_str = selected_tile[0]+","+selected_tile[1];
+    
+
     let at_unit = onscreen_units[coords_str];
-    if (at_unit != null){
-        if (currently_selected_unit != null && currently_selected_unit != at_unit){
-            // ok so we either reselected the same unit
-            // are trying to attack another unit
-            // or are trying to select a different unit
-            // also trying to select a friendly unit in range of the previously selected unit
-            
-            // deselect_unit();
-            // attack target unit
-            if ( at_unit.owner != our_playerid && (movement_visual_tiles[coords_str] != null || range_visual_tiles[coords_str] != null)){
-                // then they are in range and can be attacked
-                // call attacking function
-
-
-                QUEUE_attack_piece(currently_selected_unit, at_unit);
-                deselect_unit();
-
-            }
-            else{ // select that unit, although we should have considered team check stuff for these conditons because we're goi ng to have to rewrite these
-                select_unit(at_unit);
-            }
-        }
-        // if we already have a unit selected, compare teams and attempt to attack
-        else{
-            // select unit
+    if (currently_selected_unit == null){
+        if (at_unit != null && at_unit.owner == our_playerid){
             select_unit(at_unit);
+    }}else{ // if does already have a unit selected
+        // first check if we're selecting the same guy
+        if (currently_selected_unit == at_unit){
+            select_unit(at_unit);
+            return; // as of right now there are no behaviours for selecting the same unit
         }
-    }
-    // if there isn't a unit there, but there is a movement tile, then we start moving our selected unit there
-    else if (currently_selected_unit != null) {
+        // then check if the at unit exists
+        if (at_unit != null){
+            // check if its a friendly unit
+            if (at_unit.owner == our_playerid){
+                // NOTE: we do not currently support multiselect, so we will only select the new unit here OR follow (if ctrl is held)
+                // check if we are doing regular select
+                if (!is_ctrl_down){
+                    select_unit(at_unit);
+                    return;
+                } // else we are doing follow mode, hence follow unit
+                unit_set_follow_mode(currently_selected_unit, at_unit);
+                deselect_unit(); // this will leave us with no unit selected but hovering over the followed unit
+                return;
+            } // else its an enemy unit
+            // then check if they are inrange OR we ctrl clicked, meaning to follow them regardless
+            if (!is_ctrl_down){
+                if (movement_visual_tiles[coords_str] != null || range_visual_tiles[coords_str] != null){
+                    QUEUE_attack_piece(currently_selected_unit, at_unit);
+                    deselect_unit();
+                    return;
+                } // we only want to enter chase mode if the ctrl key is down, so skip if the criteria doesn't match
+                deselect_unit();
+                return;
+            } // else we are going to enter chase mode
+            unit_set_follow_mode(currently_selected_unit, at_unit);
+            deselect_unit();
+            return;
+        }
+        
         // ok then check to see if this is a marked movement tile
         if (movement_visual_tiles[coords_str] != null){
             // then lets send a prompt to move here
             try_move_unit_to_pos(currently_selected_unit, selected_tile);
+            deselect_unit();
+            return;
+        } // else we're going to setup destination mode
+        else if (is_ctrl_down){
+            unit_set_destination_mode(currently_selected_unit, selected_tile);
+            deselect_unit();
+            return;
         }
+        // if none of that ran, then deselect unit
         deselect_unit();
-    }
-}
+}}
 const camera_height_above_tile = 5;
 
 // ////////////////////// //
@@ -1523,7 +1621,7 @@ function client_mousedown(event) {
     event.preventDefault();
     if (event.button === 0){// left click
         move_camera_to_hovered_coords();
-        if (!is_in_action_mode) interact_with_selected_tile();
+        if (!is_in_action_mode && !event.altKey) interact_with_selected_tile();
     }else{ // we aren't allowing the controls to use the left click, because that will be heavily used by the game
         controls.onMouseDown(event);
 }}
@@ -1534,20 +1632,47 @@ function compare_vectors(a, b){
 
 function client_keydown(event){
     if (is_in_action_mode) return; // skip actions if we're in action
-    if (event.key === '1'){ // attemp to create unit at selected coords
-        try_place_unit_at_selected(unit_soldier);
-    } else if (event.key === '2'){ 
+    if        (event.key === '1'){ // place worker
         try_place_unit_at_selected(unit_worker);
-    } else if (event.key === '3'){ 
+    } else if (event.key === '2'){ // place soldier
+        try_place_unit_at_selected(unit_soldier);
+    } else if (event.key === '3'){ // place sniper
         try_place_unit_at_selected(unit_sniper);
-    } else if (event.key === '4'){ 
+    } else if (event.key === '4'){ // place tower
         try_place_unit_at_selected(unit_tower);
-    } else if (event.key === ' '){
+    } else if (event.key === '7'){ // set default mode
+        if (currently_selected_unit != null){
+            unit_set_default_mode(currently_selected_unit);
+            deselect_unit();
+    }} else if (event.key === '8'){ // set roam mode
+        if (currently_selected_unit != null){
+            unit_set_roam_mode(currently_selected_unit);
+            deselect_unit();
+    }} else if (event.key === '9'){ // set aggressive mode
+        if (currently_selected_unit != null){
+            unit_set_aggressive_mode(currently_selected_unit);
+            deselect_unit();
+    }} else if (event.key === '0'){ // toggle auto attack mode
+        is_auto_attacking = !is_auto_attacking;
+        if (!is_auto_attacking){
+            document.getElementById("sr_auto_attack_img").src = enabled_source;
+        } else{
+            document.getElementById("sr_auto_attack_img").src = disabled_source;
+            // we also want to apply the auto attack for each unit this turn
+            for (let key in onscreen_units){
+                let current_unit = onscreen_units[key];
+                if (current_unit.owner == our_playerid){
+                    let tiles_list = list_all_tiles_in_unit_range(current_unit.pos[0], current_unit.pos[1], current_unit.attack_range, current_unit.move_range, onscreen_units);
+                    let in_range_target = unit_auto_attack(tiles_list);
+                    if (in_range_target != null){
+                        clear_units_prev_queued_move(unit); 
+                        QUEUE_attack_piece(unit, in_range_target);
+    }}}}} else if (event.key === ' '){ // clear move on selected unit
         // find the currently selected unit first, thankfully we have that saaved already
         if (currently_selected_unit != null){
             clear_units_prev_queued_move(currently_selected_unit);
-        }
-        else{ // is create umnit tile selected
+            unit_set_default_mode(currently_selected_unit);
+        }else{ // is create umnit tile selected
             let selected_coord_str = selected_tile[0] + ',' + selected_tile[1];
             let test_tile = queued_creation_highlights[selected_coord_str];
             // see if theres a acreate unit tile here
@@ -1565,8 +1690,24 @@ function client_keydown(event){
                         // take the item out of the queue
                         action_queue.splice(j, 1);
                         j--;
-        }}}}
-}}
+    }}}}}
+    // put after incase anything notable happens with any other keys that are pressed
+    // if any of the special keys changed, we need to update cursor style
+    if (is_alt_down != event.altKey || is_ctrl_down != event.ctrlKey || is_shift_down != event.shiftKey){
+        is_alt_down = event.altKey;
+        is_ctrl_down = event.ctrlKey;
+        is_shift_down = event.shiftKey;
+        update_cursor_type();
+    }
+}
+function client_keyup(event){
+    if (is_alt_down != event.altKey || is_ctrl_down != event.ctrlKey || is_shift_down != event.shiftKey){
+        is_alt_down = event.altKey;
+        is_ctrl_down = event.ctrlKey;
+        is_shift_down = event.shiftKey;
+        update_cursor_type();
+    }
+}
 function messagebox_keydown(event){
     if (event.key == 'Enter'){
         send_message_as_client();

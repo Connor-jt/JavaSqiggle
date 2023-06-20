@@ -213,18 +213,18 @@ function preview_moves_at(x, y, outer_radius, inner_radius, visible_units){
     let tiles_list = list_all_tiles_in_unit_range(x, y, outer_radius, inner_radius, visible_units);
     // process unit tiles
     for (let j in tiles_list.unit){
-        let vis_tile = tiles_list.unit_list[j];
-        range_visual_tiles[position_string] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_enemy);
+        let vis_tile = tiles_list.unit[j];
+        range_visual_tiles[j] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_enemy);
     }
     // process range tiles
     for (let j in tiles_list.range){
-        let vis_tile = tiles_list.unit_list[j];
-        range_visual_tiles[position_string] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_range);
+        let vis_tile = tiles_list.range[j];
+        range_visual_tiles[j] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_range);
     }
     // process movement tiles
     for (let j in tiles_list.move){
-        let vis_tile = tiles_list.unit_list[j];
-        movement_visual_tiles[position_string] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_move);
+        let vis_tile = tiles_list.move[j];
+        movement_visual_tiles[j] = preview_hightlight_tile(vis_tile[0], vis_tile[1], preview_move);
     }
 }
 function list_all_tiles_in_unit_range(x, y, outer_radius, inner_radius, visible_units){

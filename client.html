@@ -57,9 +57,42 @@
             <!-- PLAYER INFOS BOX -->
             <div class="playerbox" id="playernames_field">
             </div>
+            <!-- TOP RIGHT INPUTS -->
+            <div class="store_right">
+                
+                <div id="sr_mode_default" class="store_item" style="background-color: #37373740; width: 70px">
+                    <img id="sr_mode_default_img" class="store_img" src="resources/units_panel/inactive_48.png"/><br/>
+                    [<span style="color: red;">7</span>]
+                    <i>none</i>
+                </div>
+                <div id="sr_mode_roam" class="store_item" style="background-color: #37373740; width: 70px">
+                    <img id="sr_mode_roam_img" class="store_img" src="resources/units_panel/inactive_48.png"/><br/>
+                    [<span style="color: red;">8</span>]
+                    <i>roam</i>
+                </div>
+                <div id="sr_mode_aggressive" class="store_item" style="background-color: #37373740; width: 70px">
+                    <img id="sr_mode_aggressive_img"class="store_img" src="resources/units_panel/inactive_48.png"/><br/>
+                    [<span style="color: red;">9</span>]
+                    <i>play</i>
+                </div>
+                <div id="sr_mode_follow" class="store_item" style="background-color: #37373740; width: 70px">
+                    <img id="sr_mode_follow_img" class="store_img" src="resources/units_panel/inactive_48.png"/><br/>
+                    <i>follow</i>
+                </div>
+                <div id="sr_mode_destination" class="store_item" style="background-color: #37373740; width: 70px">
+                    <img id="sr_mode_destination_img" class="store_img" src="resources/units_panel/inactive_48.png"/><br/>
+                    <i>goto</i>
+                </div>
+                <div id="sr_auto_attack" class="store_item" style="width: 75px">
+                    <img id="sr_auto_attack_img" class="store_img" src="resources/units_panel/inactive_48.png"/><br/>
+                    [<span style="color: red;">0</span>]
+                    <i>attack</i>
+                </div>
+
+            </div>
             <!-- TOP RIGHT UI, CONTROLS -->
             <div id="hud_r" class="hud_right">
-                <input type="range" min="0" max="20" value="0" class="slider" id="game_speed_range" oninput="game_speed_changed();">
+                <input type="range" min="0" max="20" value="0" id="game_speed_range" oninput="game_speed_changed();">
                 <br/>
                 <span>
                     Game speed: 
