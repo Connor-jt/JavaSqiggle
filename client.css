@@ -222,6 +222,7 @@ button{
     pointer-events: none
 }
 .playerbox{
+    top: 115px;
     margin-right: 190px; /* 175 (controls) + 15 (margin) */
     text-align: right;
     width: 150px;

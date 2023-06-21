@@ -44,15 +44,15 @@ const MAT_action_create_tower_highlight = new THREE.MeshBasicMaterial({color: un
 const MAT_action_move_highlight = new THREE.MeshBasicMaterial({color: 0xff7f7fff });
 const MAT_action_attack_highlight = new THREE.MeshBasicMaterial({color: 0xffef4f4f });
 
-const MAT_preview_move_highlight = new THREE.MeshBasicMaterial({color: 0xff5fff5f });
+const MAT_preview_move_highlight = new THREE.MeshBasicMaterial({color: 0xff8fff5f });
 const MAT_preview_range_highlight = new THREE.MeshBasicMaterial({color: 0xff5f5fff });
 const MAT_preview_attack_highlight = new THREE.MeshBasicMaterial({color: 0xffff4f4f });
-const MAT_preview_objective_highlight = new THREE.MeshBasicMaterial({color: 0xff4fffff });
+const MAT_preview_objective_highlight = new THREE.MeshBasicMaterial({color: 0xff666666 });
 
 const pointer_tile_size_multiplier = 0.8;
 const pointer_tile_height = 0.85;
 const action_tile_size_multiplier = 1.1;
-const objective_multiplier = 1.05;
+const objective_multiplier = 1.15;
 function action_hightlight_tile(x, y, type, unit_type){ // unit_type is only used when we 
     // create highlight item if not created already
     let action_highlight_tile;

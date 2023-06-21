@@ -515,11 +515,11 @@ function unit_mode_run_destination(unit, tiles){
             // dest reached, clear mode
             QUEUE_move_piece(unit, unit.dest); // we also dont need to try as we checked to make sure nothing was here
             unit_set_default_mode(unit);
-        } if (closest_tile === false){
+        }else if (closest_tile === false){
             console.log("somehow we are already on the tile that we're supposed to go to (destination)");
             unit_set_default_mode(unit);
-        }else { // then we actually found a tile
-            QUEUE_move_piece(unit, closest_tile); // we don need to try as we already know we can move here
+        }else{// then we actually found a tile
+        QUEUE_move_piece(unit, closest_tile); // we don need to try as we already know we can move here
 }}}
 function return_closest_reachable_tile(unit, tiles, target){ // target = attacking mode
     // first test whether we can just reach the destination (both move and attack wise)
@@ -579,7 +579,7 @@ function select_unit(selec_unit){
     if (selec_unit.owner != our_playerid) return; // do not select units that we dont own
     currently_selected_unit = selec_unit;
     // TODO: UPDATE THIS TO USE UNIT COORDS
-    preview_moves_at(selected_tile[0], selected_tile[1], currently_selected_unit.attack_range, currently_selected_unit.move_range, onscreen_units);
+    preview_moves_at(selec_unit.pos[0], selec_unit.pos[1], currently_selected_unit.attack_range, currently_selected_unit.move_range, onscreen_units);
     // we also need to display any highgluight moves that this unit muight have
     unit_show_objective(selec_unit);
     // aka objective moves
@@ -1146,7 +1146,6 @@ function disable_action_mode(){
     update_money_counter(server_verified_moners);
     // then we try and select the unit that we're hovered over at the moment
     // make sure we serlect them after cleaning up the highlights
-    select_unit_at(selected_tile);
 
     update_cursor_type(); // so if we dont move cams, it'll still update
     // finally update the UI for the store
@@ -1158,6 +1157,8 @@ function disable_action_mode(){
         if (current_unit.owner == our_playerid){ // then we own this unit, and can auto move it
             unit_mode_run(current_unit);
     }}
+    // lastly select whatever unit we're looking at
+    select_unit_at(selected_tile);
 }
 // //////////////////////// //
 // SERVER CALLED FUNCTIONS //
@@ -1434,7 +1435,7 @@ function update_cursor_type(){
     let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
     // alright lets check to see what type of cursor should be active right now
     // if action mode, then we dont get cursor feedback on tiles // also alt mode means we dont pickup anything
-    if (is_alt_down || (is_in_action_mode && !has_recieved_actions)) {
+    if ((!is_ctrl_down || currently_selected_unit == null) && (is_alt_down || (is_in_action_mode && !has_recieved_actions))) {
         if (is_alt_down && !(is_in_action_mode && !has_recieved_actions)){ document.body.style.cursor = "auto"; } // alt mode neads clear icon
         // we still need to check if someone was there
         let hovered_over_unit_for_ui = onscreen_units[offset_str];
@@ -1488,10 +1489,11 @@ function update_cursor_type(){
         if (move_tile != null){
             document.body.style.cursor = "move";
             return false;
-        } // else we assume the tile is otherwise empty and we can proceed with a goto
-        document.body.style.cursor = "row-resize";
-        return false;
-    }
+        } // else if ctrl is held down, assume its a goto
+        if (is_ctrl_down){
+            document.body.style.cursor = "row-resize";
+            return false;
+    }}
 
     document.body.style.cursor = "auto";
     return false;
@@ -1579,21 +1581,24 @@ function interact_with_selected_tile(){
                     return;
                 } // else we are doing follow mode, hence follow unit
                 unit_set_follow_mode(currently_selected_unit, at_unit);
-                deselect_unit(); // this will leave us with no unit selected but hovering over the followed unit
+                //deselect_unit(); // this will leave us with no unit selected but hovering over the followed unit
+                select_unit(currently_selected_unit);
                 return;
             } // else its an enemy unit
             // then check if they are inrange OR we ctrl clicked, meaning to follow them regardless
             if (!is_ctrl_down){
                 if (movement_visual_tiles[coords_str] != null || range_visual_tiles[coords_str] != null){
                     QUEUE_attack_piece(currently_selected_unit, at_unit);
-                    deselect_unit();
+                    //deselect_unit();
+                    select_unit(currently_selected_unit);
                     return;
                 } // we only want to enter chase mode if the ctrl key is down, so skip if the criteria doesn't match
                 deselect_unit();
                 return;
             } // else we are going to enter chase mode
             unit_set_follow_mode(currently_selected_unit, at_unit);
-            deselect_unit();
+            //deselect_unit();
+            select_unit(currently_selected_unit);
             return;
         }
         
@@ -1601,12 +1606,14 @@ function interact_with_selected_tile(){
         if (movement_visual_tiles[coords_str] != null){
             // then lets send a prompt to move here
             try_move_unit_to_pos(currently_selected_unit, selected_tile);
-            deselect_unit();
+            //deselect_unit();
+            select_unit(currently_selected_unit);
             return;
         } // else we're going to setup destination mode
         else if (is_ctrl_down){
             unit_set_destination_mode(currently_selected_unit, selected_tile);
-            deselect_unit();
+            //deselect_unit();
+            select_unit(currently_selected_unit);
             return;
         }
         // if none of that ran, then deselect unit
