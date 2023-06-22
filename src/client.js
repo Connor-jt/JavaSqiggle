@@ -578,6 +578,7 @@ function select_unit(selec_unit){
     deselect_unit();
     if (selec_unit.owner != our_playerid) return; // do not select units that we dont own
     currently_selected_unit = selec_unit;
+    move_camera_to_coords(currently_selected_unit.pos);
     // TODO: UPDATE THIS TO USE UNIT COORDS
     preview_moves_at(selec_unit.pos[0], selec_unit.pos[1], currently_selected_unit.attack_range, currently_selected_unit.move_range, onscreen_units);
     // we also need to display any highgluight moves that this unit muight have
@@ -1349,6 +1350,7 @@ function valid_placement_position(position_arr){
 // //////////// //
 var last_hovered_tile = null;
 var hovered_tile = [0,0]; 
+var hovered_unit = null;
 var selected_tile = [0,0]; // use this for whatever
 var last_cam_vec = new THREE.Vector3(); // so we can test the last
 
@@ -1428,15 +1430,30 @@ function update_hovered_stuff(){
             resposition_stats_UI();
         }
     }
+    if (hovered_tile == null) return; // im pretty sure we dont need this
+    // then we update the hovered unit, if the hovered unit is differetnt then we remove the old highjoight and then add a new one
+    let new_hoveredd_unit = onscreen_units[hovered_tile[0] +','+ hovered_tile[1]]
+    if (new_hoveredd_unit != hovered_unit){ // then we have a new hovered unit
+        // deelect the old hoverewd unit if its not null
+        if (hovered_unit != null && hovered_unit != currently_selected_unit){
+            // but dont deselect them if they are the selected unit
+            unit_hide_objective(hovered_unit);
+        }
+        // and then select the new one if the new one isn't null
+        if (new_hoveredd_unit != null){
+            unit_show_objective(new_hoveredd_unit);
+        }
+        hovered_unit = new_hoveredd_unit;
+    }
 }
 // we actually need to return whether a unit was visible or not, so we can update the UI pos immediately
 function update_cursor_type(){
 
     let offset_str = hovered_tile[0] + ',' + hovered_tile[1];
     // alright lets check to see what type of cursor should be active right now
+    
     // if action mode, then we dont get cursor feedback on tiles // also alt mode means we dont pickup anything
-    if ((!is_ctrl_down || currently_selected_unit == null) && (is_alt_down || (is_in_action_mode && !has_recieved_actions))) {
-        if (is_alt_down && !(is_in_action_mode && !has_recieved_actions)){ document.body.style.cursor = "auto"; } // alt mode neads clear icon
+    if (is_in_action_mode && !has_recieved_actions) {
         // we still need to check if someone was there
         let hovered_over_unit_for_ui = onscreen_units[offset_str];
         if (hovered_over_unit_for_ui != null){
@@ -1446,12 +1463,22 @@ function update_cursor_type(){
         toggle_stat_display(false, null);
         return false; // no cursor types in action mode
     }
-
-    let known_tile_test = instanced_tiles[offset_str]
-    if (known_tile_test == null){ // tile is not known
-        document.body.style.cursor = "help";
-        toggle_stat_display(false, null);
-        return false;
+    if (is_alt_down){
+        document.body.style.cursor = "auto";
+        // also make sure the health thing shows up still though
+        let hovered_over_unit = onscreen_units[offset_str];
+        let is_unit_there = (hovered_over_unit != null);
+        toggle_stat_display(is_unit_there, hovered_over_unit);
+        return is_unit_there;
+    }
+    // only show unknown icons if not in special move mode
+    if (!is_ctrl_down || currently_selected_unit == null){
+        let known_tile_test = instanced_tiles[offset_str]
+        if (known_tile_test == null){ // tile is not known
+            document.body.style.cursor = "help";
+            toggle_stat_display(false, null);
+            return false;
+        }
     }
 
     let move_tile = movement_visual_tiles[offset_str];
@@ -1650,15 +1677,15 @@ function client_keydown(event){
     } else if (event.key === '7'){ // set default mode
         if (currently_selected_unit != null){
             unit_set_default_mode(currently_selected_unit);
-            deselect_unit();
+            select_unit(currently_selected_unit);
     }} else if (event.key === '8'){ // set roam mode
         if (currently_selected_unit != null){
             unit_set_roam_mode(currently_selected_unit);
-            deselect_unit();
+            select_unit(currently_selected_unit);
     }} else if (event.key === '9'){ // set aggressive mode
         if (currently_selected_unit != null){
             unit_set_aggressive_mode(currently_selected_unit);
-            deselect_unit();
+            select_unit(currently_selected_unit);
     }} else if (event.key === '0'){ // toggle auto attack mode
         is_auto_attacking = !is_auto_attacking;
         if (!is_auto_attacking){
@@ -1674,7 +1701,7 @@ function client_keydown(event){
                     if (in_range_target != null){
                         clear_units_prev_queued_move(unit); 
                         QUEUE_attack_piece(unit, in_range_target);
-    }}}}} else if (event.key === ' '){ // clear move on selected unit
+    }}}}} else if (event.key === 'Backspace'){ // clear move on selected unit
         // find the currently selected unit first, thankfully we have that saaved already
         if (currently_selected_unit != null){
             clear_units_prev_queued_move(currently_selected_unit);
@@ -1697,7 +1724,13 @@ function client_keydown(event){
                         // take the item out of the queue
                         action_queue.splice(j, 1);
                         j--;
-    }}}}}
+    }}}}} else if (event.key === ' '){
+        // either select or deselect unit on selected tile
+        if (currently_selected_unit != null){
+            deselect_unit();
+        }else{
+            select_unit_at(selected_tile);
+    }}
     // put after incase anything notable happens with any other keys that are pressed
     // if any of the special keys changed, we need to update cursor style
     if (is_alt_down != event.altKey || is_ctrl_down != event.ctrlKey || is_shift_down != event.shiftKey){
@@ -1885,6 +1918,17 @@ var server_code_text = document.getElementById("join_code_field");
 var server_pinfo_form = document.getElementById("player_info_form");
 var server_pinfo_name = document.getElementById("join_name_field");
 var server_pinfo_color = document.getElementById("join_color_field");
+// update the text to be randomized
+const hex_digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 'C', 'D', 'E', 'F'];
+server_pinfo_color.value = "#" + get_random_color_hex() + get_random_color_hex() + get_random_color_hex();
+console.log(server_pinfo_color.value);
+function get_random_color_hex(){
+    return random_hex_char(6) + random_hex_char(0);
+}
+function random_hex_char(min){ // between 0-16 for min
+    let hex_value = Math.floor(Math.random() * (16-min)) + min;
+    return hex_digits[hex_value];
+}
 
 var client = null;
 var server_code = null;
@@ -1913,8 +1957,8 @@ function attempt_to_connect_to_server(){
         connect_client_to_server();
 });}
 // what is going on here ??
-function attempt_to_paste_and_join(){
-    let test = navigator.clipboard.readText();
+async function attempt_to_paste_and_join(){
+    let test = await navigator.clipboard.readText();
     if (test != null && test != ""){
         server_code_text.value = test;
         attempt_to_connect_to_server();
