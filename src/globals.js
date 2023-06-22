@@ -17,6 +17,8 @@ const destroy_unit       = 7; // { unit_id:                                     
 
 const discover_unit      = 8; // { pos: unit: unit_id:} 
 
+const discover_objective = 9; // { pos: }
+
 
 const unit_soldier_color = 0x29FF7A;
 const unit_worker_color = 0xFFD300;

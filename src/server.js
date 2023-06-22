@@ -263,6 +263,14 @@ var players = {
         has_workers: true,
     }
 };
+var objectives = {};
+function create_objective(){
+    let off_x = Math.floor(Math.random() * 129) - 64;
+    let off_y = Math.floor(Math.random() * 129) - 64;
+    
+}
+
+
 UI_addplayer(players["server"].name, players["server"].id, players["server"].color);
 var lastplayerid = 1;
 function get_all_players_simple(){
