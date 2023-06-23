@@ -9,8 +9,8 @@ const attack_unit  = 2; // { target: unit_id: cleanup_ind: new_health: } // both
 const create_unit  = 3; // { pos:    unit:    cleanup_ind:             } // 'unit_id' is passed back in when recieved by the server // 'unit' refers to the type of unit
 
 // original piece not seen - actions // ONLY SENT FROM SERVER
-const create_move_unit   = 4; // { pos: og_pos: unit_type: unit_id:             }
-const create_attack_unit = 5; // { target: pos: unit_type: unit_id: new_health: }
+const create_move_unit   = 4; // { pos: og_pos: unit: unit_id:             }
+const create_attack_unit = 5; // { target: pos: unit: unit_id: new_health: }
 const blind_attack_unit  = 6; // { target_pos:  unit_id:                        }
 
 const destroy_unit       = 7; // { unit_id:                                     }

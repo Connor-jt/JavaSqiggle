@@ -71,6 +71,7 @@ CMDs_list = {
     id:         {func: CMD_get_session_id,       hint: "prints the current session's id (players will need this to connect)"},
     clear:      {func: CMD_clear_chat,           hint: "clears all text from the console output window"},
     debug:      {func: CMD_toggle_debug,         hint: "toggles whether to display the blue debug console messages"},
+    objective:  {func: CMD_Create_objective,     hint: "gets the game to create a new objective, tiny possibilty of failure"},
 }
 function process_cmd(command, params){
     let cmd = CMDs_list[command];
@@ -142,6 +143,10 @@ function start_game(garbage){
     post_to_console("The game is now started", con_success);
     send_message('server', "The game has now started!");
     setInterval(tick, 1000);
+    // also, we're going to add some objectives to get the game started
+    create_objective(null);
+    create_objective(null);
+    create_objective(null);
 }
 function CMD_set_round_time(round_time){
     if (round_time == null){
@@ -242,6 +247,10 @@ function CMD_toggle_debug(garbage){
     is_printing_debug = !is_printing_debug;
     post_to_console("show debug messages is now: " + is_printing_debug, con_debug);
 }
+function CMD_Create_objective(garbage){ // cannot be bothered to link the pos stuff
+    create_objective(null);
+    post_to_console("objective created(?)", con_debug);
+}
 
 
 // ////// //
@@ -261,16 +270,9 @@ var players = {
         recieved_moves: null, // also not used on ther server player
         money: 0,
         has_workers: true,
+        registered_objectives: {}
     }
 };
-var objectives = {};
-function create_objective(){
-    let off_x = Math.floor(Math.random() * 129) - 64;
-    let off_y = Math.floor(Math.random() * 129) - 64;
-    
-}
-
-
 UI_addplayer(players["server"].name, players["server"].id, players["server"].color);
 var lastplayerid = 1;
 function get_all_players_simple(){
@@ -325,6 +327,25 @@ function get_username_of_connection(connection){
 var server_units = {};
 var queued_creates = {};
 
+var objectives = {};
+const points_per_objective = 75;
+const max_objectives = 10;
+var objectives_count = 0;
+var round_cycle = 0;
+const rounds_between_new_objective = 6;
+function create_objective(coords){
+    // generate the new coords
+    if (coords == null || coords == undefined){
+        coords = [Math.floor(Math.random() * 129) - 64, Math.floor(Math.random() * 129) - 64]; 
+    }
+    let postion_str = coords[0] + ',' + coords[1];
+    if (objectives[postion_str] == null){
+        objectives[postion_str] = coords; // idk what to actually put in there, as we dont actually need anything?
+        objectives_count += 1;
+    }else{
+        post_to_console("objective already exists at: " + postion_str, con_warning);
+}}
+
 // ///////////// //
 // SERVER SETUP //
 // /////////// //
@@ -366,7 +387,7 @@ function recieved_data_from_client(data){
         post_to_console("Received non defined data from: " + get_username_of_connection(connection.peer) + ": " + data.id, con_warning);
     }
     else if (data.type == CLIENT_user_message){
-        post_to_console("Message from: " + get_username_of_connection(connection.peer), con_debug);
+        post_to_console("Message from: " + get_username_of_connection(connection.peer), con_note);
         send_message(connection.peer, data.content);
     }
     else if (data.type == CLIENT_joining){
@@ -390,6 +411,7 @@ function recieved_data_from_client(data){
             recieved_moves: null,
             money: starting_money,
             has_workers: true,
+            registered_objectives: {}
         }
         post_to_console("Client joined: " + get_username_of_connection(connection.peer), con_success);
         // tell everyone that a new player has joined
@@ -510,6 +532,11 @@ function tick(){
     }else{
         // if we hit 0, run it
         if (action_time == max_action_time){
+            round_cycle += 1;
+            if (round_cycle >= rounds_between_new_objective && objectives_count < max_objectives){
+                create_objective(null);
+                round_cycle = 0;
+            }
             request_user_actions();
         }
         action_time -= 1;
@@ -653,7 +680,7 @@ function commit_actions()
                 curr_player.recieved_moves.push({ type: blind_attack_unit, unit_id: moved_unit.unit_id, target_pos: target_unit.pos, player_id: catt_act.player_id });
             }
             else if (sees_target){
-                curr_player.recieved_moves.push({ type: create_attack_unit, pos:moved_unit.pos, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: create_attack_unit, pos:moved_unit.pos, unit: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, player_id: catt_act.player_id });
             }
             // else they dont see anything occur
         }
@@ -725,7 +752,7 @@ function commit_actions()
             }
             // if they can see the tile that they move to, pushback moveto_create
             else if (sees_new_pos){
-                curr_player.recieved_moves.push({ type: create_move_unit, unit_type: moved_unit.type, unit_id: moved_unit.unit_id, og_pos: og_pos, pos: moved_unit.pos, player_id: cmov_act.player_id });
+                curr_player.recieved_moves.push({ type: create_move_unit, unit: moved_unit.type, unit_id: moved_unit.unit_id, og_pos: og_pos, pos: moved_unit.pos, player_id: cmov_act.player_id });
                 curr_player.vis_units[new_unit_key] = 1;
             }
             // else they dont see it before/after, so nothing happens
@@ -795,6 +822,34 @@ function commit_actions()
                     curr_player.vis_units[unit_key] = 1;
                 }
         }}
+    }
+    // /////////////////////// //
+    // PROCESS THE OBJECTIVES //
+    // ///////////////////// //
+    for (let jeans in players){
+        let curr_player = players[jeans];
+        if (curr_player.connection == null) continue; // do not run for server
+        // hmm we should use a system that just checks the length of both the actual list of the player seen list for this
+        for (let key in objectives){
+            if (curr_player.registered_objectives[key] == null){
+                let objective_pos = objectives[key];
+                // then register this objective for this player
+                curr_player.registered_objectives[key] = objective_pos;
+                curr_player.recieved_moves.push({ type: discover_objective, pos: objective_pos });
+                player_see_area(curr_player, objective_pos[0], objective_pos[1], 2);
+            }
+        }
+        
+    }
+    // /////////////////////////////// //
+    // AWARD MONEY FOR THE OBJECTIVES //
+    // ///////////////////////////// //
+    for (let key in objectives){
+        let found_unit = server_units[key];
+        if (found_unit != null){
+            // then find the owner and award them some money
+            get_user_object_from_id(found_unit.owner).money += points_per_objective;
+        }
     }
 
 

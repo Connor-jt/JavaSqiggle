@@ -162,6 +162,39 @@ function create_tile(x, y, discover_list){
     
     if (discover_list[position_string] != null) return position_string;
 }
+
+const neutral_objective_color  = new THREE.MeshLambertMaterial({color: 0xffdfdfdf, flatShading: true});
+function terrain_create_objective_tile(x, y, player){
+    // clear the existing tile if there is one
+    let position_string =  x + "," + y;
+    let tile = instanced_tiles[position_string];
+    if (tile == null){
+        tile = { tile : null, use_count : 1 };
+        instanced_tiles[position_string] = tile;
+        console.log("no tile where objective tile is supposed to be??")
+    }else{
+        scene.remove(tile['tile']);
+        tile['tile'] = null;
+    }
+    // figure out if its an off tile or not
+    let pos_off = get_location_offset(x, y); // position offset
+    // generate tile height
+    let tile_z = location_height(pos_off[0], pos_off[1]);
+    // determine hieght color
+    let hieght_color = neutral_objective_color;
+    if (player != null){
+        hieght_color = player.color_mat;
+    }
+    // create instance with height relative material
+    let tile_instance = new THREE.Mesh(geometry, hieght_color);
+    tile_instance.scale.set(1, tile_z, 1); // set height
+    // x-z-y format???? why????
+    tile_instance.position.set(pos_off[0], (tile_z/2)*tile_height, pos_off[1]);
+    // add new tile and record it to the tile instances
+    scene.add(tile_instance);
+    tile['tile'] = tile_instance;
+}
+
 function remove_tile(x, y, delete_list){
     let position_string =  x +"," + y;
     let tile = instanced_tiles[position_string];

@@ -3,21 +3,21 @@
 // TEXTURE CONFIGS //
 // ////////////// //
 function setup_player_colors(player){
-    let color_mat = new THREE.MeshLambertMaterial({color: player.color, flatShading: true})
+    player.color_mat = new THREE.MeshLambertMaterial({color: player.color, flatShading: true})
     player.worker_mat = [
-        color_mat,
+        player.color_mat,
         worker_material 
     ];
     player.soldier_mat = [
-        color_mat,
+        player.color_mat,
         solider_material
     ];
     player.sniper_mat = [
-        color_mat,
+        player.color_mat,
         sniper_material 
     ];
     player.tower_mat = [
-        color_mat,
+        player.color_mat,
         tower_material 
     ];
 }

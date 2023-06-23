@@ -136,6 +136,26 @@ function initialize(map_seed){
 var currently_selected_unit = null;
 var onscreen_units = {};
 var queued_discover_units = {};
+var client_objectives = {};
+function client_create_objetive(pos){
+    let objective_pos_str = pos[0] +','+ pos[1];
+    client_objectives[objective_pos_str] = pos;
+    discover_units_from_list(create_tile_circle(pos[0],pos[1], 2, queued_discover_units));
+    // test whether a unit is already on the tile
+    let unit_test = onscreen_units[objective_pos_str];
+    update_objective(pos, unit_test);
+}
+function update_objective(pos, unit){
+    // here we neeed to get the color of the unit, or if null then use the default color
+    if (unit == null) {
+        terrain_create_objective_tile(pos[0], pos[1], null)
+    }else{ 
+        terrain_create_objective_tile(pos[0], pos[1], return_player_from_id(unit.owner))
+}}
+function check_if_causes_objective_update(unit){
+    if (client_objectives[unit.pos[0]+','+unit.pos[1]] != null){
+        update_objective(unit.pos, unit);
+}}
 
 var money = 0;
 var expenses = 0;
@@ -255,8 +275,15 @@ function does_unit_exist_at(x, y){
 }
 function unit_see(unit, last_position){
     // return a list of units to create, typically it will be none
-    let units_to_create = create_tile_circle(unit.pos[0],unit.pos[1], unit.vision_range, queued_discover_units);
+    discover_units_from_list(create_tile_circle(unit.pos[0],unit.pos[1], unit.vision_range, queued_discover_units));
     move_camera_to_coords(unit.pos);
+    
+    // this is used to clear tiles that were previously seen, if not done correctly this tiles will still be there if no units have vision here
+    if (last_position != null){
+        unit_stop_seeing(unit, last_position);
+    }
+}
+function discover_units_from_list(units_to_create){
     for (let j = 0; j < units_to_create.length; j++){
         let unit_coord_str = units_to_create[j];
         let discover_action = queued_discover_units[unit_coord_str];
@@ -267,10 +294,6 @@ function unit_see(unit, last_position){
         }else{
             console.log("tried to discover unit that couldn't be found");
     }}
-    // this is used to clear tiles that were previously seen, if not done correctly this tiles will still be there if no units have vision here
-    if (last_position != null){
-        unit_stop_seeing(unit, last_position);
-    }
 }
 function unit_stop_seeing(unit, position){
     let last_position = unit.pos;
@@ -298,7 +321,7 @@ function unit_set_roam_mode(unit){
 function unit_set_aggressive_mode(unit){
     clear_units_prev_queued_move(currently_selected_unit);
     unit_clear_mode(unit);
-    unit.mode = umode_destination;
+    unit.mode = umode_aggressive;
     unit_mode_run(unit); // destination will be calculated in here
     unit_update_mode_ui(unit);
 }
@@ -448,8 +471,22 @@ function unit_mode_run_aggressive(unit, tiles){
 
     if (closest_unit == null){
         // then enter objective mode
-        unit.dest = [0,0]; // we're pretending this location is the objective for the time being
-    } else { // they're still up, grab their latest destination
+        let closest_ob_length = null;
+        let closest_ob = null;
+        for (let key in client_objectives){
+            let curr_objective_pos = client_objectives[key];
+            let ob_pos_off = get_location_offset(curr_objective_pos[0], curr_objective_pos[1]);
+            // measure the distance between unit and dest
+            let ob_dist = distance_between_points(unit_pos_off, ob_pos_off); 
+            if (closest_ob_length == null || ob_dist < closest_ob_length){
+                closest_ob_length = ob_dist;
+                closest_ob = curr_objective_pos;
+        }}
+        if (closest_ob != null){
+            unit.dest = closest_ob.slice(0);
+        } else{
+            return; // if no objective was found, dont do anything?
+    }} else { // they're still up, grab their latest destination
         unit.dest = closest_unit.pos.slice(0);
         unit.target_id = closest_unit.unit_id;
         is_attacking = true;
@@ -458,7 +495,7 @@ function unit_mode_run_aggressive(unit, tiles){
     // determine if we are moving somewhere or attack-chasing
     let closest_tile = null;
     if (is_attacking){ //  enemy
-        closest_tile = return_closest_reachable_tile(unit, tiles, targ_unit);
+        closest_tile = return_closest_reachable_tile(unit, tiles, closest_unit);
     } else { // objective
         closest_tile = return_closest_reachable_tile(unit, tiles, null);
     }
@@ -466,7 +503,7 @@ function unit_mode_run_aggressive(unit, tiles){
     if (closest_tile != null) {
         if (closest_tile === true){
             if (is_attacking){
-                QUEUE_attack_piece(unit, targ_unit);
+                QUEUE_attack_piece(unit, closest_unit);
             } else {
                 QUEUE_move_piece(unit, unit.dest); // this theoretically moves us exactly to objective point
         }}else if (closest_tile === false){
@@ -562,7 +599,7 @@ function distance_between_points(p1, p2){
 
 function unit_show_objective(unit){
     unit_hide_objective(unit); // clear first just in case
-    if (unit.mode != umode_none){
+    if (unit.mode != umode_none && unit.dest != null){
         unit.dest_highlight = preview_hightlight_tile(unit.dest[0], unit.dest[1], preview_objective);
     }
 }
@@ -752,7 +789,7 @@ function move_piece(action){
         delete onscreen_units[target_unit.pos[0]+","+target_unit.pos[1]];
     }
     else{ // 'create_move_unit'
-        target_unit = create_piece_at(action.unit_type, action.unit_id, action.og_pos, action.player_id);
+        target_unit = create_piece_at(action.unit, action.unit_id, action.og_pos, action.player_id);
     }
 
     let old_pos = [target_unit.pos[0], target_unit.pos[1]];
@@ -790,6 +827,8 @@ function PROGRESS_move_piece(){
         // cleanup the highlight
         clear_unit_highlights(current_action.unit);
         current_action.unit.mesh.position.copy(current_action.destination);
+        // verify if they now hold an objective
+        check_if_causes_objective_update(current_action.unit);
         // now test to see if they stopped being visible
         let final_pos_str = current_action.unit.pos[0] + ',' + current_action.unit.pos[1];
         if (instanced_tiles[final_pos_str] == null){
@@ -844,7 +883,7 @@ function attack_piece(action){
 function create_attack_piece(action){
     // create the attacker unit first of all
     //let attacker_unit = get_client_unit_by_id(action.unit_id);
-    let attacker_unit = create_piece_at(action.unit_type, action.unit_id, action.pos, action.player_id);
+    let attacker_unit = create_piece_at(action.unit, action.unit_id, action.pos, action.player_id);
     let target_unit = get_client_unit_by_id(action.target_unit);
 
     if (attacker_unit == null || target_unit == null){
@@ -1015,6 +1054,7 @@ function PROGRESS_create_piece(){
             }
             // finish bounce
             current_action.unit.mesh.position.copy(current_action.destination);
+            check_if_causes_objective_update(current_action.unit);
 
             current_action = null;
             return;
@@ -1073,6 +1113,7 @@ function delete_unit(target_unit){
 function create_piece_at_and_wrap(type, unit_id, coords, owner_id){
     let created_unit = create_piece_at(type, unit_id, coords, owner_id);
     onscreen_units[created_unit.pos[0] + ',' + created_unit.pos[1]] = created_unit;
+    check_if_causes_objective_update(created_unit);
 }
 function create_piece_at(type, unit_id, coords, owner_id){
     let created_unit = CLIENT_CREATE_UNIT(type, unit_id, coords, return_player_from_id(owner_id));
@@ -1849,6 +1890,9 @@ function recieved_packet_from_server(data){
         // now pre process some of those actions
         // aka, load in all the discover actions
         // as well as remove them from the queue entirely, so we dont go crazy figuring out why we skip some actions occasionally
+        //  we are also going to process the objective discovery events immediately? 
+        // it would probably be a better idea to aniumate these a s it would hten notify the playewr thats thats wherer theya are supposed to play
+
         actions_to_commit = data.content['moves'];
         server_verified_moners = data.content['money'];
         for (let j = 0; j < actions_to_commit.length; j++){
@@ -1858,7 +1902,15 @@ function recieved_packet_from_server(data){
                 console.log("unit discoverable at : " + curr_Action.pos[0] + ',' + curr_Action.pos[1]);
                 actions_to_commit.splice(j, 1);
                 j--; // make sure we account for the index that we just lost
+        }} // make sure we do the objectives in their own loop,else they would not properly dsicover units probably (althoug we can assume it'd be fine actually, due to the server implementation)
+        for (let j = 0; j < actions_to_commit.length; j++){
+            let curr_Action = actions_to_commit[j];
+            if (curr_Action.type == discover_objective){
+                client_create_objetive(curr_Action.pos);
+                actions_to_commit.splice(j, 1);
+                j--; // how did we forget this :skull: :moyai:
         }}
+        
         has_recieved_actions = true;
     }
     else{
@@ -1998,6 +2050,7 @@ function submit_playerinfos(){
 // ///////////////////////////// //
 
 function send_message_as_client(){
+    if (messagebox_text.value == null || messagebox_text.value == "") return;
     server_connection.send({type: CLIENT_user_message, content: messagebox_text.value});
     messagebox_text.value = "";  // clear text input
     // we dont do any other fancy stuff as the message will be sent back to us shortly
