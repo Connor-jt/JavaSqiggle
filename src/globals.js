@@ -11,9 +11,9 @@ const create_unit  = 3; // { pos:    unit:    cleanup_ind:             } // 'uni
 // original piece not seen - actions // ONLY SENT FROM SERVER
 const create_move_unit   = 4; // { pos: og_pos: unit: unit_id:             }
 const create_attack_unit = 5; // { target: pos: unit: unit_id: new_health: }
-const blind_attack_unit  = 6; // { target_pos:  unit_id:                        }
+const blind_attack_unit  = 6; // { target_pos:  unit_id: new_health:       }
 
-const destroy_unit       = 7; // { unit_id:                                     }
+const destroy_unit       = 7; // { unit_id:                                }
 
 const discover_unit      = 8; // { pos: unit: unit_id:} 
 

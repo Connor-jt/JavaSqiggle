@@ -63,9 +63,9 @@ function create_soldier(){
         defense: 3,     
         attack: 2,      
         
-        move_range: 2,  
-        attack_range: 2,
-        vision_range: 2
+        move_range: 3,  
+        attack_range: 3,
+        vision_range: 3
     };
 }
 function create_worker(){
@@ -73,9 +73,9 @@ function create_worker(){
         defense: 2,     
         attack: 2,      
         
-        move_range: 1,  
-        attack_range: 1,
-        vision_range: 3
+        move_range: 2,  
+        attack_range: 2,
+        vision_range: 4
     };
 }
 function create_sniper(){
@@ -83,9 +83,9 @@ function create_sniper(){
         defense: 2,     
         attack: 1,      
         
-        move_range: 1,  
-        attack_range: 4,
-        vision_range: 5
+        move_range: 2,  
+        attack_range: 5,
+        vision_range: 7
     };
 }
 function create_tower(){
@@ -94,7 +94,7 @@ function create_tower(){
         attack: 5,      
         
         move_range: 1,  
-        attack_range: 2,
-        vision_range: 3
+        attack_range: 3,
+        vision_range: 4
     };
 }

@@ -206,12 +206,14 @@ button{
 }
 
 .hud_right{
+    pointer-events: none;
     position: absolute;
     width: 175px;
     right: 0px;
     top: 115px;
 }
 .hud_right_img{
+    pointer-events: none;
     /*margin: 5px;*/
     margin-left: 75px;
     display: block;
@@ -222,6 +224,7 @@ button{
     pointer-events: none
 }
 .playerbox{
+    pointer-events: none;
     top: 115px;
     margin-right: 190px; /* 175 (controls) + 15 (margin) */
     text-align: right;
@@ -232,5 +235,6 @@ button{
     transform: translate(-100%, 0%);
 }
 .playerbox span{
+    pointer-events: none;
     display:block;
 }

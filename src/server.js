@@ -1,10 +1,10 @@
 
 //
-var max_turn_time = 10;
+var max_turn_time = 15;
 var turn_time = max_turn_time;
 var max_action_time = 5;
 var action_time = max_action_time;
-var starting_money = 10800;
+var starting_money = 800; // note that the starting troops detract from this
 
 // /////////////////////////////////////////// //
 // DEBUG SCRIPT TO SKIP PHASES ON ENTER PRESS //
@@ -50,6 +50,12 @@ function post_to_console(message, color){
 function client_error(err){
     let connection = this;
     post_to_console("Client error from: " + get_username_of_connection(connection.peer) + ": " + err, con_error);
+}
+function client_close(junk){
+    let connection = this;
+    let quiter = get_username_of_connection(connection.peer);
+    post_to_console("Client's session closed: " + quiter, con_error);
+    send_message('server', quiter + " has disconected from the game.");
 }
 function server_error(err){
     post_to_console("Server error: "+err, con_error);
@@ -163,7 +169,7 @@ function CMD_set_round_time(round_time){
     }
 }
 function CMD_set_action_time(action_time){
-    if (round_time == null){
+    if (action_time == null){
         post_to_console("you need to specify the parameter", con_warning);
         return;
     }
@@ -270,7 +276,8 @@ var players = {
         recieved_moves: null, // also not used on ther server player
         money: 0,
         has_workers: true,
-        registered_objectives: {}
+        registered_objectives: {},
+        units_left: -1 // mark as already eliminated
     }
 };
 UI_addplayer(players["server"].name, players["server"].id, players["server"].color);
@@ -336,7 +343,7 @@ const rounds_between_new_objective = 6;
 function create_objective(coords){
     // generate the new coords
     if (coords == null || coords == undefined){
-        coords = [Math.floor(Math.random() * 129) - 64, Math.floor(Math.random() * 129) - 64]; 
+        coords = [Math.floor(Math.random() * 64) - 32, Math.floor(Math.random() * 64) - 32]; 
     }
     let postion_str = coords[0] + ',' + coords[1];
     if (objectives[postion_str] == null){
@@ -375,6 +382,7 @@ server.on("connection", (client) => {
 
     client.on("data", recieved_data_from_client);
     client.on('error', client_error);
+    client.on('close', client_close);
 });
  // saving this for later, so we can notify of disconnects etc
 server.on('disconnect', (id) => {
@@ -411,7 +419,8 @@ function recieved_data_from_client(data){
             recieved_moves: null,
             money: starting_money,
             has_workers: true,
-            registered_objectives: {}
+            registered_objectives: {},
+            units_left: 0
         }
         post_to_console("Client joined: " + get_username_of_connection(connection.peer), con_success);
         // tell everyone that a new player has joined
@@ -424,8 +433,8 @@ function recieved_data_from_client(data){
         // queue them for recieiving their initial pieces next turn
         // pick a random tile to set this player up
         // [-64-64, -64-64] //
-        let off_x = Math.floor(Math.random() * 129) - 64;
-        let off_y = Math.floor(Math.random() * 129) - 64;
+        let off_x = Math.floor(Math.random() * 64) - 32;
+        let off_y = Math.floor(Math.random() * 64) - 32;
         all_players_actions.push({ type: create_unit, pos: [off_x  , off_y  ], player_id: new_player.id, unit: unit_soldier })
         all_players_actions.push({ type: create_unit, pos: [off_x  , off_y+1], player_id: new_player.id, unit: unit_worker})
         all_players_actions.push({ type: create_unit, pos: [off_x+1, off_y  ], player_id: new_player.id, unit: unit_soldier })
@@ -636,8 +645,8 @@ function commit_actions()
             continue;
         }
         // test whether the target exists
-        let target_unit = get_server_unit_by_id(catt_act.target);
-        if (target_unit == null){
+        let ttarget_unit = get_server_unit_by_id(catt_act.target);
+        if (ttarget_unit == null){
             console.log("[SERVER] player attempted to attack non-existing unit, not allowed")
             continue;
         }
@@ -647,7 +656,7 @@ function commit_actions()
             continue;
         }
         // and then test whether the player DOES NOT own the target
-        if (target_unit.owner == catt_act.player_id){
+        if (ttarget_unit.owner == catt_act.player_id){
             console.log("[SERVER] player attempted to attack unit that they own")
             continue;
         }
@@ -655,10 +664,19 @@ function commit_actions()
         // perform is in range check
 
         // maybe perform damage test
-        target_unit.defense -= moved_unit.attack;
-        if (target_unit.defense <= 0){ // target was killed
-            destroyed_units.push(target_unit);
-        }
+        ttarget_unit.defense -= moved_unit.attack;
+        if (ttarget_unit.defense <= 0){ // target was killed
+            // DO NOT PUSH IF THE UNIT IS ALREADY ON THE LIST
+            // check to see if unit is already on the destroyed list
+            let is_already_on_the_list = false;
+            for (let jj = 0; jj < destroyed_units.length; jj++){
+                if (destroyed_units[jj] == ttarget_unit){
+                    is_already_on_the_list = true; 
+                    break;
+            }}
+            if (!is_already_on_the_list){
+                destroyed_units.push(ttarget_unit);
+        }}
         played_units[moved_unit.unit_id] = 1;
         // send back the action
         
@@ -667,20 +685,20 @@ function commit_actions()
         // can see the attacker but not target, we need to do a diff attack
         // can see target but not attacker, do a create attack
         let attacker_key = moved_unit.pos[0] + ','+ moved_unit.pos[1];
-        let target_key = target_unit.pos[0] + ','+ target_unit.pos[1];
+        let target_key = ttarget_unit.pos[0] + ','+ ttarget_unit.pos[1];
         for (let j in players){
             let curr_player = players[j];
             if (curr_player.connection == null) continue; // do not run for server
             let sees_attacker = curr_player.vis_units[attacker_key] != null;
             let sees_target = curr_player.vis_units[target_key] != null;
             if (sees_attacker && sees_target){
-                curr_player.recieved_moves.push({ type: attack_unit, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: attack_unit, unit_id: moved_unit.unit_id, target_unit: ttarget_unit.unit_id, new_health: ttarget_unit.defense, player_id: catt_act.player_id });
             }
             else if (sees_attacker){
-                curr_player.recieved_moves.push({ type: blind_attack_unit, unit_id: moved_unit.unit_id, target_pos: target_unit.pos, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: blind_attack_unit, unit_id: moved_unit.unit_id, target_pos: ttarget_unit.pos, player_id: catt_act.player_id });
             }
             else if (sees_target){
-                curr_player.recieved_moves.push({ type: create_attack_unit, pos:moved_unit.pos, unit: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: target_unit.unit_id, new_health: target_unit.defense, player_id: catt_act.player_id });
+                curr_player.recieved_moves.push({ type: create_attack_unit, pos: moved_unit.pos, unit: moved_unit.type, unit_id: moved_unit.unit_id, target_unit: ttarget_unit.unit_id, new_health: ttarget_unit.defense, player_id: catt_act.player_id });
             }
             // else they dont see anything occur
         }
@@ -762,21 +780,26 @@ function commit_actions()
     // //////////////////////// //
     // PROCESS DESTROYED UNITS //
     // ////////////////////// //
-    for (let j = 0; j < destroyed_units.length; j++){
+    for (let jjj = 0; jjj < destroyed_units.length; jjj++){
         // then delete the unit from the match
-        let destroyed_unit_key = get_server_unit_KEY_by_id(destroyed_units[j].unit_id);
+        let killed_unit = destroyed_units[jjj];
+        let destroyed_unit_key = get_server_unit_KEY_by_id(killed_unit);
+        if (destroyed_unit_key == null){
+            console.log("failed to kill unit due to key being missing, attempting workaround");
+            destroyed_unit_key = killed_unit.pos[0]+','+killed_unit.pos[1];
+        }
         for (let key in players){
             let curr_player = players[key];
             if (curr_player.connection == null) continue; // do not run for server
             // clear sight for owner
-            if (curr_player.id == server_units[destroyed_unit_key].owner){
-                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: destroyed_units[j].unit_id });
-                player_stop_seeing_area(curr_player, server_units[destroyed_unit_key].pos[0], server_units[destroyed_unit_key].pos[1], server_units[destroyed_unit_key].vision_range);
+            if (curr_player.id == killed_unit.owner){
+                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: killed_unit.unit_id });
+                player_stop_seeing_area(curr_player, killed_unit.pos[0], killed_unit.pos[1], killed_unit.vision_range);
                 delete curr_player.vis_units[destroyed_unit_key];
             }
             // else clear the unit from seen units
             else if (curr_player.vis_units[destroyed_unit_key] != null){
-                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: destroyed_units[j].unit_id });
+                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: killed_unit.unit_id });
                 delete curr_player.vis_units[destroyed_unit_key];
             }
         }
@@ -866,7 +889,7 @@ function commit_actions()
     }
     for (let key in server_units){
         let curr_unit = server_units[key];
-        if (curr_unit.type = unit_worker){
+        if (curr_unit.type == unit_worker){
             // get owner and assign true
             let owner_p = get_user_object_from_id(curr_unit.owner);
             if (owner_p == null){
@@ -874,6 +897,27 @@ function commit_actions()
                 continue;
             }
             owner_p.has_workers = true;
+    }}
+
+    // //////////////////////////// //
+    // PROCESS PLAYER ELIMINATIONS //
+    // ////////////////////////// //
+    // first reset counts, unless eliminated
+    for (let pkey in players){
+        let c_player = players[pkey];
+        if (c_player.units_left != -1){
+            c_player.units_left = 0;
+    }}
+    // for efficency we'd build a new map id:player_object, so we dont loop through each player a buncha times
+    for (let ukey in server_units){
+        get_user_object_from_id(server_units[ukey].owner).units_left += 1;
+    }
+    // now we check if anyone was eliminated
+    for (let pkey in players){
+        let c_player = players[pkey];
+        if (c_player.units_left == 0){
+            c_player.units_left = -1; // mark as eliminated
+            send_message('server', c_player.name + " has been eliminated!!!");
     }}
 }
 // functions to manage what each player actually sees
@@ -952,10 +996,11 @@ function get_server_unit_by_id(unit_id){
     }
     return null;
 }
-function get_server_unit_KEY_by_id(unit_id){
-    for (let unit in server_units){
-        if (server_units[unit].unit_id == unit_id) return unit;
-    }
+function get_server_unit_KEY_by_id(target_unit){
+    for (let uunit_key in server_units){
+        if (server_units[uunit_key] == target_unit) {
+            return uunit_key;
+    }}
     return null;
 }
 

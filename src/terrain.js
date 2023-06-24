@@ -47,7 +47,7 @@ const MAT_action_attack_highlight = new THREE.MeshBasicMaterial({color: 0xffef4f
 const MAT_preview_move_highlight = new THREE.MeshBasicMaterial({color: 0xff8fff5f });
 const MAT_preview_range_highlight = new THREE.MeshBasicMaterial({color: 0xff5f5fff });
 const MAT_preview_attack_highlight = new THREE.MeshBasicMaterial({color: 0xffff4f4f });
-const MAT_preview_objective_highlight = new THREE.MeshBasicMaterial({color: 0xff666666 });
+const MAT_preview_objective_highlight = new THREE.MeshBasicMaterial({color: 0xffA6A6A6 });
 
 const pointer_tile_size_multiplier = 0.8;
 const pointer_tile_height = 0.85;
@@ -163,7 +163,14 @@ function create_tile(x, y, discover_list){
     if (discover_list[position_string] != null) return position_string;
 }
 
-const neutral_objective_color  = new THREE.MeshLambertMaterial({color: 0xffdfdfdf, flatShading: true});
+function create_objective_tile_circle(x, y, radius, player){
+    for (let row = -radius; row <= radius; row++) {
+        let items_in_this_row = ((radius*2) + 1) - Math.abs(row);
+        let row_left_x = x - (radius - Math.floor(Math.abs(row)/2)) + ((Math.abs(y) % 2) * (Math.abs(row) % 2));
+        for (let column = 0; column < items_in_this_row; column++) {
+            terrain_create_objective_tile(row_left_x + column, y + row, player);
+}}}
+const neutral_objective_color  = new THREE.MeshLambertMaterial({color: 0xffffffff, flatShading: true});
 function terrain_create_objective_tile(x, y, player){
     // clear the existing tile if there is one
     let position_string =  x + "," + y;
@@ -206,7 +213,8 @@ function remove_tile(x, y, delete_list){
             // test whether theres a unit here 
             if (delete_list[position_string] != null) return position_string;
     }}
-    else console.log("tile \"" + position_string + "\" does not exist, thus cannot be destroyed");
+    else 
+        console.log("tile \"" + position_string + "\" does not exist, thus cannot be destroyed");
 }
 function create_tile_circle(x, y, radius, discover_list){
     let create_list = [];
