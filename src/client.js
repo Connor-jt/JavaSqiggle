@@ -136,21 +136,28 @@ function initialize(map_seed){
 var currently_selected_unit = null;
 var onscreen_units = {};
 var queued_discover_units = {};
-var client_objectives = {};
-function client_create_objetive(pos){
-    let objective_pos_str = pos[0] +','+ pos[1];
-    client_objectives[objective_pos_str] = pos;
-    discover_units_from_list(create_tile_circle(pos[0],pos[1], 2, queued_discover_units));
+var client_objectives = {}; // pos: is_controlled:
+function client_create_objetive(pos_){
+    let objective_pos_str = pos_[0] +','+ pos_[1];
+    client_objectives[objective_pos_str] = {pos: pos_, is_controlled: false};
+    discover_units_from_list(create_tile_circle(pos_[0],pos_[1], 2, queued_discover_units));
     // test whether a unit is already on the tile
     let unit_test = onscreen_units[objective_pos_str];
-    update_objective(pos, unit_test);
+    update_objective(pos_, unit_test);
 }
 function update_objective(pos, unit){
     // here we neeed to get the color of the unit, or if null then use the default color
+    let c_objectiove = client_objectives[pos[0]+','+pos[1]];
+    if (c_objectiove == null){
+        console.log("referenced objective does not exist");
+        return;
+    }
     if (unit == null) {
         create_objective_tile_circle(pos[0], pos[1], 1, null)
+        c_objectiove.is_controlled = false;
     }else{ 
         create_objective_tile_circle(pos[0], pos[1], 1, return_player_from_id(unit.owner))
+        c_objectiove.is_controlled = true;
 }}
 function check_if_causes_objective_update(unit, is_leaving){
     if (client_objectives[unit.pos[0]+','+unit.pos[1]] != null){
@@ -397,7 +404,7 @@ function unit_mode_run(unit){
     let tiles_list = list_all_tiles_in_unit_range(unit.pos[0], unit.pos[1], unit.attack_range, unit.move_range, onscreen_units);
     // we also want to check if we have auto attacks on
     if (is_auto_attacking){
-        let in_range_target = unit_auto_attack(tiles_list);
+        let in_range_target = unit_auto_attack(unit, tiles_list);
         if (in_range_target != null){
             QUEUE_attack_piece(unit, in_range_target);
             return;
@@ -413,16 +420,29 @@ function unit_mode_run(unit){
     } else if (unit.mode == umode_destination){
         unit_mode_run_destination(unit, tiles_list);
 }}
-function unit_auto_attack(tiles_list){
+function unit_auto_attack(grunit, tiles_list){
+    let unit_pos_of = get_location_offset(grunit.pos[0], grunit.pos[1]);
+    let closest_enemy = null;
+    let distan = null;
+    let looking_for_health_target = true;
     for (let key in tiles_list.unit){
         let curr_unit = onscreen_units[key];
-        if (curr_unit == null){
+        if (curr_unit == null){ // i dont think this will ever happen
             console.log("unit said to be on tile but not found: " + tiles_list.unit[key])
         }else if (curr_unit.owner != our_playerid){
-            // then we found a target to auto attack
-            return curr_unit; // we can skip the rest of this section now
-    }} 
-    return null;
+            let target_pos_off = get_location_offset(curr_unit.pos[0], curr_unit.pos[1]);
+            // measure the distance between unit and target
+            let _dist = distance_between_points(unit_pos_of, target_pos_off); 
+            if (distan == null || _dist < distan || looking_for_health_target){
+                if (looking_for_health_target || curr_unit.calculated_damage < curr_unit.defense){
+                    if (curr_unit.calculated_damage < curr_unit.defense){
+                        looking_for_health_target = false;
+                    }
+                    distan = _dist;
+                    closest_enemy = curr_unit;
+                    curr_unit.calculated_damage += grunit.attack;
+    }}}} 
+    return closest_enemy; 
 }
 
 // MAKE SURE ALL OF THESE STORE THE OUTPUT DEST VALUE, SO WE CAN SEE WHERE THEY ARE GOING
@@ -447,7 +467,7 @@ function unit_mode_run_roam(unit, tiles){
             QUEUE_move_piece(unit, unit.dest); 
         }else if (closest_tile === false){ // this shouldn't happen as we'll check before to see if we're on the spot
             console.log("somehow we are already on the tile that we're supposed to go to (roam)");
-            unit_set_default_mode(unit);
+            unit.dest = null;
         }else { // then we actually found a tile
             QUEUE_move_piece(unit, closest_tile); 
 }}}
@@ -477,13 +497,15 @@ function unit_mode_run_aggressive(unit, tiles){
     // now meaure distances to objectives
     let closest_ob = null;
     for (let key in client_objectives){
-        let curr_objective_pos = client_objectives[key];
-        let ob_pos_off = get_location_offset(curr_objective_pos[0], curr_objective_pos[1]);
+        let cobjective = client_objectives[key].pos;
+        if (cobjective.is_controlled) continue;
+
+        let ob_pos_off = get_location_offset(cobjective.pos[0], cobjective.pos[1]);
         // measure the distance between unit and dest
         let ob_dist = distance_between_points(unit_pos_off, ob_pos_off); 
         if (closest_length == null || ob_dist < closest_length){
             closest_length = ob_dist;
-            closest_ob = curr_objective_pos;
+            closest_ob = cobjective.pos;
     }}
     // then determine which mode to enter (attack/objective/none)
     if (closest_ob != null){ // objective mode
@@ -512,7 +534,7 @@ function unit_mode_run_aggressive(unit, tiles){
                 QUEUE_move_piece(unit, unit.dest); // this theoretically moves us exactly to objective point
         }}else if (closest_tile === false){
             // ideally, we're on the objective and we dont need to move
-            console.log("somehow we are already on the tile that we're supposed to go to (aggressive)");
+            unit_set_default_mode(unit);
         }else { // then we actually found a tile
             QUEUE_move_piece(unit, closest_tile); // we don need to try as we already know we can move here
 }}}
@@ -724,9 +746,17 @@ var current_action = null;
 var action_speed = 1.0;
 // need to have something that essentially breaks the flow if theres an action like moving or attacking
 function commit_next_action(){
-    if (actions_to_commit == undefined) return;
+    if (stackions_to_commit == undefined) return;
     let next_action = get_next_action_to_commit();
-    if (next_action == null) disable_action_mode(); // if null, then there are no more actions to process
+    if (next_action == null) { // then see if theres any more to go
+        stackions_to_commit.splice(0, 1); // knock the first stack off the block
+        return; // better to let it queue to the next frame then to do some recursion?
+    }
+    if (stackions_to_commit.length == 0){
+        disable_action_mode(); // if null, then there are no more actions to process
+        return;
+    }
+    
     else if (next_action.type == create_unit)        create_piece(next_action);
     else if (next_action.type == move_unit)          move_piece(next_action);
     else if (next_action.type == create_move_unit)   move_piece(next_action);
@@ -742,35 +772,39 @@ const committing_create_actions  = 2;
 const committing_destroy_actions = 3;
 // step processing code, do all actions in this order: attacks -> moves -> creations
 function get_next_action_to_commit(){
+    if (stackions_to_commit.length == 0){
+        console.log("we shouldn't hit this, no stackions during check for next action")
+        return null;
+    }
     // attack block 
     if (action_phase == committing_attack_actions){
-        for (let j = 0; j < actions_to_commit.length; j++){
-            if (actions_to_commit[j].type == attack_unit || actions_to_commit[j].type == create_attack_unit || actions_to_commit[j].type == blind_attack_unit){
+        for (let j = 0; j < stackions_to_commit[0].length; j++){
+            if (stackions_to_commit[0][j].type == attack_unit || stackions_to_commit[0][j].type == create_attack_unit || stackions_to_commit[0][j].type == blind_attack_unit){
                 return load_action(j);
     }} action_phase = committing_move_actions; }
     // move block
     if (action_phase == committing_move_actions){
-        for (let j = 0; j < actions_to_commit.length; j++){
-            if (actions_to_commit[j].type == move_unit || actions_to_commit[j].type == create_move_unit){
+        for (let j = 0; j < stackions_to_commit[0].length; j++){
+            if (stackions_to_commit[0][j].type == move_unit || stackions_to_commit[0][j].type == create_move_unit){
                 return load_action(j);
     }} action_phase = committing_create_actions; }
     // create block
     if (action_phase == committing_create_actions){
-        for (let j = 0; j < actions_to_commit.length; j++){
-            if (actions_to_commit[j].type == create_unit ){
+        for (let j = 0; j < stackions_to_commit[0].length; j++){
+            if (stackions_to_commit[0][j].type == create_unit ){
                 return load_action(j);
     }} action_phase = committing_destroy_actions; }
     // destroy block
-    for (let j = 0; j < actions_to_commit.length; j++){
-        if (actions_to_commit[j].type == destroy_unit ){
+    for (let j = 0; j < stackions_to_commit[0].length; j++){
+        if (stackions_to_commit[0][j].type == destroy_unit ){
             return load_action(j);
     }}
     // else return blank and cancel action mode, as theres no more actions to process
     return null;
 }
 function load_action(j){
-    let result = actions_to_commit[j];
-    actions_to_commit.splice(j, 1);
+    let result = stackions_to_commit[0][j];
+    stackions_to_commit[0].splice(j, 1);
     return result;
 }
 
@@ -794,6 +828,7 @@ function move_piece(action){
     }
     else{ // 'create_move_unit'
         target_unit = create_piece_at(action.unit, action.unit_id, action.og_pos, action.player_id);
+        target_unit.defense = action.health; // update the health accordingly
     }
     check_if_causes_objective_update(target_unit, true);
 
@@ -916,7 +951,7 @@ function create_attack_piece(action){
     };
 
 }
-// THIS ONE IS NOT DONE YET !!!!!!!!!!!!! // i think its done now
+// THIS ONE IS NOT DONE YET !!!!!!!!!!!!! // i think its done now // ok im pretty sure its actualkly done and working now 
 function blind_attack_piece(action){
     let attacker_unit = get_client_unit_by_id(action.unit_id);
     if (attacker_unit == null){
@@ -958,8 +993,7 @@ function PROGRESS_attack_piece(){
         if (current_action.offset >= 1.0){
             current_action.outbound = false; // aka we're heading back now
         }
-    }
-    else{ // heading back
+    }else{ // heading back
         current_action.offset -= attack_movement_speed*action_speed;
         // check if we've now completed the movement, if so, end this action 
         if (current_action.offset <= 0.0 && (current_action.target_exists == false || current_action.impact_offset < 0.0)){
@@ -1141,7 +1175,8 @@ function create_piece_at(type, unit_id, coords, owner_id){
 }
 
 
-var actions_to_commit = [];
+//var actions_to_commit = [];
+var stackions_to_commit = [];
 var server_verified_moners = -9876; // hopefully we never see this value printed ingame
 var is_in_action_mode = false;
 var has_recieved_actions = false;
@@ -1205,6 +1240,10 @@ function disable_action_mode(){
     update_cursor_type(); // so if we dont move cams, it'll still update
     // finally update the UI for the store
     update_unit_counts();
+    // reset our calculated damage trackers
+    for (let key in onscreen_units){
+        onscreen_units[key].calculated_damage = 0;
+    }
 
     // and then we run through our unit behaviours, so the units decide their next moves
     for (let key in onscreen_units){
@@ -1254,13 +1293,6 @@ function update_time(new_time, action_time){
     }
 
     //action_text.innerText = "-".repeat(((new_time == 0)? action_time : 0 ));
-    // dont need this garbage because we now let players skip 
-    // if (new_time <= 0 && last_state_was_action) {
-    //     // check to see if we're still processing actions
-    //     // if so, then its up to the action processor to allow us to act again
-    //     last_state_was_action = false;
-    //     if (actions_to_commit.length == 0) disable_action_mode();
-    // }
 }
 function recieve_server_message(){
     // here we just print the contents to the little message box at the bottom right
@@ -1769,7 +1801,7 @@ function client_keydown(event){
                 let current_unit = onscreen_units[key];
                 if (current_unit.owner == our_playerid){
                     let tiles_list = list_all_tiles_in_unit_range(current_unit.pos[0], current_unit.pos[1], current_unit.attack_range, current_unit.move_range, onscreen_units);
-                    let in_range_target = unit_auto_attack(tiles_list);
+                    let in_range_target = unit_auto_attack(current_unit, tiles_list);
                     if (in_range_target != null){
                         clear_units_prev_queued_move(current_unit); 
                         QUEUE_attack_piece(current_unit, in_range_target);
@@ -1921,23 +1953,24 @@ function recieved_packet_from_server(data){
         //  we are also going to process the objective discovery events immediately? 
         // it would probably be a better idea to aniumate these a s it would hten notify the playewr thats thats wherer theya are supposed to play
 
-        actions_to_commit = data.content['moves'];
+        let new_stackion = data.content['moves'];
         server_verified_moners = data.content['money'];
-        for (let j = 0; j < actions_to_commit.length; j++){
-            let curr_Action = actions_to_commit[j];
+        for (let j = 0; j < new_stackion.length; j++){
+            let curr_Action = new_stackion[j];
             if (curr_Action.type == discover_unit){
                 queued_discover_units[curr_Action.pos[0] + ',' + curr_Action.pos[1]] = curr_Action;
                 console.log("unit discoverable at : " + curr_Action.pos[0] + ',' + curr_Action.pos[1]);
-                actions_to_commit.splice(j, 1);
+                new_stackion.splice(j, 1);
                 j--; // make sure we account for the index that we just lost
         }} // make sure we do the objectives in their own loop,else they would not properly dsicover units probably (althoug we can assume it'd be fine actually, due to the server implementation)
-        for (let j = 0; j < actions_to_commit.length; j++){
-            let curr_Action = actions_to_commit[j];
+        for (let j = 0; j < new_stackion.length; j++){
+            let curr_Action = new_stackion[j];
             if (curr_Action.type == discover_objective){
                 client_create_objetive(curr_Action.pos);
-                actions_to_commit.splice(j, 1);
+                new_stackion.splice(j, 1);
                 j--; // how did we forget this :skull: :moyai:
-        }}
+        }} // then push to the main stackion
+        stackions_to_commit.push(new_stackion);
         
         has_recieved_actions = true;
     }
