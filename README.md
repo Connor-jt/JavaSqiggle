@@ -16,7 +16,7 @@ in this game there are 4 pieces:
 
 each piece has a respective cost to create, increasing as the list descends (so the worker is the cheapest, and the tower the most expensive)
 
-if a player has no workers left, then they can place in any known position but at a higher cost (this is essentially a last resort option to allow players to play on, given they have the resources)
+if a player has no workers left, then they can place on any known tile but at a higher cost (this is essentially a last resort option to allow players to play on, given they have the resources)
 
 for each piece they will have these attributes:
 - defense - the attack points required to eliminate a piece, deminishing each time the piece is attacked
