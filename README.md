@@ -86,7 +86,7 @@ Advanced interaction controls
 - [crosshair]   click + ctrl + selected piece + hostile piece :  chase them
 - [cell]        click + ctrl + selected piece + friendly piece : follow them
 
-#Dependencies
+# Dependencies
 - PeerJS for webRTC connections for the peer to peer network system
 - Three.js for the simplified openGL workflow (including a modified orbital controls plugin)
 - simplex-noise.js for the noise generation system
