@@ -770,7 +770,7 @@ function commit_actions()
             }
             // if they can see the tile that they move to, pushback moveto_create
             else if (sees_new_pos){
-                curr_player.recieved_moves.push({ type: create_move_unit, unit: moved_unit.type, unit_id: moved_unit.unit_id, og_pos: og_pos, pos: moved_unit.pos, player_id: cmov_act.player_id });
+                curr_player.recieved_moves.push({ type: create_move_unit, unit: moved_unit.type, unit_id: moved_unit.unit_id, og_pos: og_pos, pos: moved_unit.pos, health: moved_unit.defense, player_id: cmov_act.player_id });
                 curr_player.vis_units[new_unit_key] = 1;
             }
             // else they dont see it before/after, so nothing happens

@@ -52,6 +52,7 @@ function CLIENT_CREATE_UNIT(type, unit_id, position, player){
     new_unit.dest = null; // pos array
     new_unit.target_id = null; // used for following both enemies and friendlies
     new_unit.mode = umode_none;
+    new_unit.calculated_damage = 0;
     if      (type == unit_worker)  new_unit.mesh = new THREE.Mesh(unit_mesh_geo, player.worker_mat);
     else if (type == unit_soldier) new_unit.mesh = new THREE.Mesh(unit_mesh_geo, player.soldier_mat);
     else if (type == unit_sniper)  new_unit.mesh = new THREE.Mesh(unit_mesh_geo, player.sniper_mat);
