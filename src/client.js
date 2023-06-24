@@ -148,14 +148,17 @@ function client_create_objetive(pos){
 function update_objective(pos, unit){
     // here we neeed to get the color of the unit, or if null then use the default color
     if (unit == null) {
-        terrain_create_objective_tile(pos[0], pos[1], null)
+        create_objective_tile_circle(pos[0], pos[1], 1, null)
     }else{ 
-        terrain_create_objective_tile(pos[0], pos[1], return_player_from_id(unit.owner))
+        create_objective_tile_circle(pos[0], pos[1], 1, return_player_from_id(unit.owner))
 }}
-function check_if_causes_objective_update(unit){
+function check_if_causes_objective_update(unit, is_leaving){
     if (client_objectives[unit.pos[0]+','+unit.pos[1]] != null){
-        update_objective(unit.pos, unit);
-}}
+        if (is_leaving) {
+            update_objective(unit.pos, null);
+        } else {
+            update_objective(unit.pos, unit);
+}}}
 
 var money = 0;
 var expenses = 0;
@@ -165,6 +168,7 @@ var is_auto_attacking = false;
 // inital as null so it has neither state when we start the match (we will call it on init)
 function apply_purchase(target_unit){
     let unit_cost = match_unit_type_to_price(target_unit.type);
+    apply_expense(target_unit.type, true);
     update_money_counter(money - unit_cost);
 }
 function update_money_counter(new_value){
@@ -252,22 +256,19 @@ function update_unit_counts(){
 
 function get_client_unit_by_id(unit_id){
     for (let unit in onscreen_units){
-        if (onscreen_units[unit].unit_id == unit_id) return onscreen_units[unit];
-    }
+        if (onscreen_units[unit].unit_id == unit_id) {
+            return onscreen_units[unit];
+    }}
     return null;
 }
 function get_client_unit_KEY_by_id(unit_id){
     for (let unit in onscreen_units){
-        if (onscreen_units[unit].unit_id == unit_id) return unit;
-    }
+        if (onscreen_units[unit].unit_id == unit_id) {
+            return unit;
+    }}
+    console.log("failed to find unit key for deletion, critical errors may ensue")
     return null;
 }
-/*// UNUSED + WAS MAKING ERRORS
-function does_unit_exist(query_unit_id){
-    for (let j in onscreen_units){
-        if (onscreen_units[j].unit_id == query_unit_id) return true;
-    } return false;
-}*/
 function does_unit_exist_at(x, y){
     let current_coords = x + ',' + y;
     let unit = onscreen_units[current_coords];
@@ -306,27 +307,31 @@ function unit_stop_seeing(unit, position){
     for (let j = 0; j < units_to_del.length; j++){
         let unit_object = onscreen_units[units_to_del[j]];
         if (unit_object != null){
-            delete_unit(unit_object);
+            if (unit != unit_object){            
+                delete_unit(unit_object);
+            } else{
+                console.log("attemtped to delete unit that we own, early");
+            }
         }else{
             console.log("instructed to delete unit that does not exist");
 }}}
 // NEVER RUN ANY OF THESE IN ACTION MODE
 function unit_set_roam_mode(unit){
-    clear_units_prev_queued_move(currently_selected_unit);
+    clear_units_prev_queued_move(unit);
     unit_clear_mode(unit);
     unit.mode = umode_roam;
     unit_mode_run(unit); // destination will be calculated in here
     unit_update_mode_ui(unit);
 }
 function unit_set_aggressive_mode(unit){
-    clear_units_prev_queued_move(currently_selected_unit);
+    clear_units_prev_queued_move(unit);
     unit_clear_mode(unit);
     unit.mode = umode_aggressive;
     unit_mode_run(unit); // destination will be calculated in here
     unit_update_mode_ui(unit);
 }
 function unit_set_follow_mode(unit, target){
-    clear_units_prev_queued_move(currently_selected_unit);
+    clear_units_prev_queued_move(unit);
     unit_clear_mode(unit);
     unit.mode = umode_follow;
     unit.target_id = target.unit_id;
@@ -334,7 +339,7 @@ function unit_set_follow_mode(unit, target){
     unit_update_mode_ui(unit);
 }
 function unit_set_destination_mode(unit, dest_arr){
-    clear_units_prev_queued_move(currently_selected_unit);
+    clear_units_prev_queued_move(unit);
     unit_clear_mode(unit);
     unit.mode = umode_destination;
     unit.dest = dest_arr;
@@ -457,6 +462,7 @@ function unit_mode_run_aggressive(unit, tiles){
     let unit_pos_off = get_location_offset(unit.pos[0], unit.pos[1]);
 
     let closest_length = null;
+
     let closest_unit = null;
     for (let key in onscreen_units){
         let curr_unit = onscreen_units[key];
@@ -468,28 +474,26 @@ function unit_mode_run_aggressive(unit, tiles){
                 closest_length = unit_dist;
                 closest_unit = curr_unit;
     }}}
-
-    if (closest_unit == null){
-        // then enter objective mode
-        let closest_ob_length = null;
-        let closest_ob = null;
-        for (let key in client_objectives){
-            let curr_objective_pos = client_objectives[key];
-            let ob_pos_off = get_location_offset(curr_objective_pos[0], curr_objective_pos[1]);
-            // measure the distance between unit and dest
-            let ob_dist = distance_between_points(unit_pos_off, ob_pos_off); 
-            if (closest_ob_length == null || ob_dist < closest_ob_length){
-                closest_ob_length = ob_dist;
-                closest_ob = curr_objective_pos;
-        }}
-        if (closest_ob != null){
-            unit.dest = closest_ob.slice(0);
-        } else{
-            return; // if no objective was found, dont do anything?
-    }} else { // they're still up, grab their latest destination
+    // now meaure distances to objectives
+    let closest_ob = null;
+    for (let key in client_objectives){
+        let curr_objective_pos = client_objectives[key];
+        let ob_pos_off = get_location_offset(curr_objective_pos[0], curr_objective_pos[1]);
+        // measure the distance between unit and dest
+        let ob_dist = distance_between_points(unit_pos_off, ob_pos_off); 
+        if (closest_length == null || ob_dist < closest_length){
+            closest_length = ob_dist;
+            closest_ob = curr_objective_pos;
+    }}
+    // then determine which mode to enter (attack/objective/none)
+    if (closest_ob != null){ // objective mode
+        unit.dest = closest_ob.slice(0);
+    } else if (closest_unit != null){ // attack mode
         unit.dest = closest_unit.pos.slice(0);
         unit.target_id = closest_unit.unit_id;
         is_attacking = true;
+    } else { // none mode
+        return; // if no objective was found, dont do anything?
     }
 
     // determine if we are moving somewhere or attack-chasing
@@ -791,6 +795,7 @@ function move_piece(action){
     else{ // 'create_move_unit'
         target_unit = create_piece_at(action.unit, action.unit_id, action.og_pos, action.player_id);
     }
+    check_if_causes_objective_update(target_unit, true);
 
     let old_pos = [target_unit.pos[0], target_unit.pos[1]];
     // update the position on this unit
@@ -803,6 +808,7 @@ function move_piece(action){
         // render the new area for this piece
         unit_see(target_unit, old_pos);
     }
+    // also we need to double check if they just left the objective\
 
     // now log all the data so we can animate
     // get the final destination real world position
@@ -828,7 +834,7 @@ function PROGRESS_move_piece(){
         clear_unit_highlights(current_action.unit);
         current_action.unit.mesh.position.copy(current_action.destination);
         // verify if they now hold an objective
-        check_if_causes_objective_update(current_action.unit);
+        check_if_causes_objective_update(current_action.unit, false);
         // now test to see if they stopped being visible
         let final_pos_str = current_action.unit.pos[0] + ',' + current_action.unit.pos[1];
         if (instanced_tiles[final_pos_str] == null){
@@ -884,6 +890,7 @@ function create_attack_piece(action){
     // create the attacker unit first of all
     //let attacker_unit = get_client_unit_by_id(action.unit_id);
     let attacker_unit = create_piece_at(action.unit, action.unit_id, action.pos, action.player_id);
+    onscreen_units[attacker_unit.pos[0] + ',' + attacker_unit.pos[1]] = attacker_unit; // only so things dont explode when we delete this guy after
     let target_unit = get_client_unit_by_id(action.target_unit);
 
     if (attacker_unit == null || target_unit == null){
@@ -918,8 +925,8 @@ function blind_attack_piece(action){
     }
 
     // caclulate postion of not seen target unit
-    let pos_off = get_location_offset(action.pos[0], action.pos[1]);
-    let dest = new THREE.Vector3(pos_off[0], find_visual_hieght_at(action.pos[0]+","+action.pos[1], pos_off[0], pos_off[1]), pos_off[1]);
+    let pos_off = get_location_offset(action.target_pos[0], action.target_pos[1]);
+    let dest = new THREE.Vector3(pos_off[0], find_visual_hieght_at(action.target_pos[0]+","+action.target_pos[1], pos_off[0], pos_off[1]), pos_off[1]);
 
     let origin = calculate_realworld_position_of(attacker_unit);
     current_action = { type: attack_unit, unit: attacker_unit, target: null,
@@ -1054,7 +1061,7 @@ function PROGRESS_create_piece(){
             }
             // finish bounce
             current_action.unit.mesh.position.copy(current_action.destination);
-            check_if_causes_objective_update(current_action.unit);
+            check_if_causes_objective_update(current_action.unit, false);
 
             current_action = null;
             return;
@@ -1091,12 +1098,16 @@ function PROGRESS_destroy_piece(){
     if (current_action.curr_scale <= 0){
         delete_unit(current_action.unit);
         current_action = null;
+        console.log("unit deleted");
     }
 }
 
 function delete_unit(target_unit){
     // clear their visibles, this woule only be fore if a unit was destroyed and was not able to make their move during action phase
     clear_unit_highlights(target_unit);
+    unit_hide_objective(target_unit);
+    
+    check_if_causes_objective_update(target_unit, true);
     // clear the model from the scene
     scene.remove(target_unit.mesh);
     // clear the visible tiles owned by the unit
@@ -1105,15 +1116,17 @@ function delete_unit(target_unit){
     }
     // remove the piece from the unit list
     let target_unit_key = get_client_unit_KEY_by_id(target_unit.unit_id);
+    if (onscreen_units[target_unit_key] == null){
+        console.log("failure to delete unit based off of key")
+    }
     delete onscreen_units[target_unit_key];
     
-    console.log("unit deleted");
 }
 // currently do not need to return anything from this function, as it just instaniates the unit into the game
 function create_piece_at_and_wrap(type, unit_id, coords, owner_id){
     let created_unit = create_piece_at(type, unit_id, coords, owner_id);
     onscreen_units[created_unit.pos[0] + ',' + created_unit.pos[1]] = created_unit;
-    check_if_causes_objective_update(created_unit);
+    check_if_causes_objective_update(created_unit, false);
 }
 function create_piece_at(type, unit_id, coords, owner_id){
     let created_unit = CLIENT_CREATE_UNIT(type, unit_id, coords, return_player_from_id(owner_id));
@@ -1716,23 +1729,41 @@ function client_keydown(event){
     } else if (event.key === '4'){ // place tower
         try_place_unit_at_selected(unit_tower);
     } else if (event.key === '7'){ // set default mode
-        if (currently_selected_unit != null){
+        if (is_ctrl_down){
+            for (let ukey in onscreen_units){
+                let curr_unert = onscreen_units[ukey];
+                if (curr_unert.owner == our_playerid){
+                    unit_set_default_mode(curr_unert);
+        }}} else if (currently_selected_unit != null){
             unit_set_default_mode(currently_selected_unit);
             select_unit(currently_selected_unit);
-    }} else if (event.key === '8'){ // set roam mode
-        if (currently_selected_unit != null){
+        }
+    } else if (event.key === '8'){ // set roam mode
+        if (is_ctrl_down){
+            for (let ukey in onscreen_units){
+                let curr_unert = onscreen_units[ukey];
+                if (curr_unert.owner == our_playerid){
+                    unit_set_roam_mode(curr_unert);
+        }}} else if (currently_selected_unit != null){
             unit_set_roam_mode(currently_selected_unit);
             select_unit(currently_selected_unit);
-    }} else if (event.key === '9'){ // set aggressive mode
-        if (currently_selected_unit != null){
+        }
+    } else if (event.key === '9'){ // set aggressive mode
+        if (is_ctrl_down){
+            for (let ukey in onscreen_units){
+                let curr_unert = onscreen_units[ukey];
+                if (curr_unert.owner == our_playerid){
+                    unit_set_aggressive_mode(curr_unert);
+        }}} else if (currently_selected_unit != null){
             unit_set_aggressive_mode(currently_selected_unit);
             select_unit(currently_selected_unit);
-    }} else if (event.key === '0'){ // toggle auto attack mode
+        }
+    } else if (event.key === '0'){ // toggle auto attack mode
         is_auto_attacking = !is_auto_attacking;
         if (!is_auto_attacking){
-            document.getElementById("sr_auto_attack_img").src = enabled_source;
-        } else{
             document.getElementById("sr_auto_attack_img").src = disabled_source;
+        } else{
+            document.getElementById("sr_auto_attack_img").src = enabled_source;
             // we also want to apply the auto attack for each unit this turn
             for (let key in onscreen_units){
                 let current_unit = onscreen_units[key];
@@ -1740,8 +1771,8 @@ function client_keydown(event){
                     let tiles_list = list_all_tiles_in_unit_range(current_unit.pos[0], current_unit.pos[1], current_unit.attack_range, current_unit.move_range, onscreen_units);
                     let in_range_target = unit_auto_attack(tiles_list);
                     if (in_range_target != null){
-                        clear_units_prev_queued_move(unit); 
-                        QUEUE_attack_piece(unit, in_range_target);
+                        clear_units_prev_queued_move(current_unit); 
+                        QUEUE_attack_piece(current_unit, in_range_target);
     }}}}} else if (event.key === 'Backspace'){ // clear move on selected unit
         // find the currently selected unit first, thankfully we have that saaved already
         if (currently_selected_unit != null){
@@ -1873,10 +1904,7 @@ function recieved_packet_from_server(data){
         load_player(data.content);
     }
     else if (data.type == SERVER_message){
-        let sender_player = return_player_from_id(data.content.user_id);
-        UI_add_message(data.content.text, sender_player.color);
-        // and then append to client min chat
-        min_chat_message(data.content.text, sender_player.color);
+        load_chat_mesage(data.content.text, return_player_from_id(data.content.user_id).color);
     }
     else if (data.type == SERVER_time_update){
         update_time(data.content.turn_time, data.content.action_time);
@@ -1917,13 +1945,20 @@ function recieved_packet_from_server(data){
         console.log("recieved invalid packet type: " + data.type); 
     }
 }
+function load_chat_mesage(m_text, color){
+    UI_add_message(m_text, color);
+    // and then append to client min chat
+    min_chat_message(m_text, color);
+}
 function client_error(err){
     console.log("client connection experienced error:\n"+err);
-    abort_connection(err);
+    load_chat_mesage("peerjs server connection error, this may cause issues", "#ff0000");
+    //abort_connection(err);
 }
 function server_error(err){
     console.log("connection to server experienced error:\n"+err);
-    abort_connection(err);
+    load_chat_mesage("game session server connection error, connection probably lost", "#ff0000");
+    //abort_connection(err);
 }
 
 var playerlist_box = document.getElementById("playernames_field");

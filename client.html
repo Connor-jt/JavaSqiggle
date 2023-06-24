@@ -11,7 +11,7 @@
 
 
 
-        <div id="session_ui"> <!-- in match UI -->
+        <div id="session_ui" class="hidden"> <!-- in match UI -->
             <!-- FULLSCREEN ACTION PHASE -->
             <!-- MIDDLE UI, GAME FEEDBACK -->
             <div id="cine_top_bar" style="top:0px;" class="cinemator">
@@ -92,7 +92,7 @@
             </div>
             <!-- TOP RIGHT UI, CONTROLS -->
             <div id="hud_r" class="hud_right">
-                <input type="range" min="0" max="20" value="0" id="game_speed_range" oninput="game_speed_changed();">
+                <input type="range" min="0" max="20" value="0" id="game_speed_range" style="pointer-events: auto;" oninput="game_speed_changed();">
                 <br/>
                 <span>
                     Game speed: 
