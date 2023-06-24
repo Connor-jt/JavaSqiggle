@@ -1,5 +1,5 @@
 # JavaSqiggle
-current access link: https://connor-jt.github.io/Web-game/
+current access link: https://connor-jt.github.io/JavaSqiggle/
 
 my first javascript project, a simple multiplayer web game
 
