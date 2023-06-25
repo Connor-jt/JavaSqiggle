@@ -335,7 +335,7 @@ var server_units = {};
 var queued_creates = {};
 
 var objectives = {};
-const points_per_objective = 75;
+const points_per_objective = 25;
 const max_objectives = 10;
 var objectives_count = 0;
 var round_cycle = 0;

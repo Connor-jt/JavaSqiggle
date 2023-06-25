@@ -474,6 +474,14 @@ function unit_mode_run_roam(unit, tiles){
 function unit_mode_run_aggressive(unit, tiles){
     // check whether any units are onscreen, if there are chase them
     // if none go for objectives // NOT IMPLEMENTED YET
+    let ob_test_pos_str = unit.pos[0]+','+unit.pos[1];
+    // check to see if we're aclready on an objective, if so exit aggressive mode 
+    if (client_objectives[ob_test_pos_str] != null){
+        // then we're on one already
+        console.log("unit already on objective, play mode cleared");
+        unit_set_default_mode(unit);
+        return;
+    }
 
     // we actually want the units to constantly chase the closest units
     // let targ_unit = get_client_unit_by_id(unit.target_id);
@@ -497,7 +505,7 @@ function unit_mode_run_aggressive(unit, tiles){
     // now meaure distances to objectives
     let closest_ob = null;
     for (let key in client_objectives){
-        let cobjective = client_objectives[key].pos;
+        let cobjective = client_objectives[key];
         if (cobjective.is_controlled) continue;
 
         let ob_pos_off = get_location_offset(cobjective.pos[0], cobjective.pos[1]);
@@ -532,8 +540,9 @@ function unit_mode_run_aggressive(unit, tiles){
                 QUEUE_attack_piece(unit, closest_unit);
             } else {
                 QUEUE_move_piece(unit, unit.dest); // this theoretically moves us exactly to objective point
+                unit_set_default_mode(unit);
         }}else if (closest_tile === false){
-            // ideally, we're on the objective and we dont need to move
+            // ideally, we're on the objective and we dont need to move // actually this means theres nowhere to move
             unit_set_default_mode(unit);
         }else { // then we actually found a tile
             QUEUE_move_piece(unit, closest_tile); // we don need to try as we already know we can move here
@@ -552,6 +561,7 @@ function unit_mode_run_follow(unit, tiles){
     let is_attacking = false;
     if (targ_unit.owner == our_playerid){ // friendly
         closest_tile = return_closest_reachable_tile(unit, tiles, null);
+
     } else { // enemy
         closest_tile = return_closest_reachable_tile(unit, tiles, targ_unit);
         is_attacking = true;
@@ -747,14 +757,22 @@ var action_speed = 1.0;
 // need to have something that essentially breaks the flow if theres an action like moving or attacking
 function commit_next_action(){
     if (stackions_to_commit == undefined) return;
+
     let next_action = get_next_action_to_commit();
-    if (next_action == null) { // then see if theres any more to go
-        stackions_to_commit.splice(0, 1); // knock the first stack off the block
-        return; // better to let it queue to the next frame then to do some recursion?
-    }
-    if (stackions_to_commit.length == 0){
-        disable_action_mode(); // if null, then there are no more actions to process
-        return;
+    if (next_action == null && stackions_to_commit.length > 0) { // then see if theres any more to go
+        
+        console.log(stackions_to_commit[0].length + " actions left in stackion, stackion completed, " + (stackions_to_commit.length-1) + " stackions left")
+        
+        stackions_to_commit = stackions_to_commit.slice(1); // knock the first stack off the block
+        if (stackions_to_commit.length == 0){
+            disable_action_mode();
+            console.log("all stackions completed")
+            return;
+        } else {
+            preprocess_first_stackion();
+            commit_next_action(); // do recursion so we process the next stackion until we find one that has moves in it
+            return;
+        }
     }
     
     else if (next_action.type == create_unit)        create_piece(next_action);
@@ -773,30 +791,31 @@ const committing_destroy_actions = 3;
 // step processing code, do all actions in this order: attacks -> moves -> creations
 function get_next_action_to_commit(){
     if (stackions_to_commit.length == 0){
-        console.log("we shouldn't hit this, no stackions during check for next action")
+        console.log("stackions seemingly empty")
         return null;
     }
+    let cur_stackion = stackions_to_commit[0];
     // attack block 
     if (action_phase == committing_attack_actions){
-        for (let j = 0; j < stackions_to_commit[0].length; j++){
-            if (stackions_to_commit[0][j].type == attack_unit || stackions_to_commit[0][j].type == create_attack_unit || stackions_to_commit[0][j].type == blind_attack_unit){
+        for (let j = 0; j < cur_stackion.length; j++){
+            if (cur_stackion[j].type == attack_unit || cur_stackion[j].type == create_attack_unit || cur_stackion[j].type == blind_attack_unit){
                 return load_action(j);
     }} action_phase = committing_move_actions; }
     // move block
     if (action_phase == committing_move_actions){
-        for (let j = 0; j < stackions_to_commit[0].length; j++){
-            if (stackions_to_commit[0][j].type == move_unit || stackions_to_commit[0][j].type == create_move_unit){
+        for (let j = 0; j < cur_stackion.length; j++){
+            if (cur_stackion[j].type == move_unit || cur_stackion[j].type == create_move_unit){
                 return load_action(j);
     }} action_phase = committing_create_actions; }
     // create block
     if (action_phase == committing_create_actions){
-        for (let j = 0; j < stackions_to_commit[0].length; j++){
-            if (stackions_to_commit[0][j].type == create_unit ){
+        for (let j = 0; j < cur_stackion.length; j++){
+            if (cur_stackion[j].type == create_unit ){
                 return load_action(j);
     }} action_phase = committing_destroy_actions; }
     // destroy block
-    for (let j = 0; j < stackions_to_commit[0].length; j++){
-        if (stackions_to_commit[0][j].type == destroy_unit ){
+    for (let j = 0; j < cur_stackion.length; j++){
+        if (cur_stackion[j].type == destroy_unit ){
             return load_action(j);
     }}
     // else return blank and cancel action mode, as theres no more actions to process
@@ -901,6 +920,10 @@ function attack_piece(action){
     if (attacker_unit == null || target_unit == null){
         console.log("[CLIENT] recieved instruction to attack piece that does not exist");
         return;
+    }
+    // move the camera to the unit if its ours
+    if (attacker_unit.owner == our_playerid){
+        move_camera_to_coords(attacker_unit.pos);
     }
 
     let dest = calculate_realworld_position_of(target_unit);
@@ -1047,9 +1070,9 @@ function PROGRESS_attack_piece(){
         }
     }
 }
-const unit_drop_height = 18.5;
-const unit_drop_gravity = 0.038;
-const unit_drop_bounce_factor = 0.38;
+const unit_drop_height = 15;
+const unit_drop_gravity = 0.052;
+const unit_drop_bounce_factor = 0.31;
 function create_piece(action){ // this will be used in a lot of places i think
     let creator_player = return_player_from_id(action.player_id);
     let created_unit = CLIENT_CREATE_UNIT(action.unit, action.unit_id, action.pos, creator_player);
@@ -1083,7 +1106,8 @@ function PROGRESS_create_piece(){
         current_action.position.y = current_action.destination.y // do not go through
         current_action.acceleraton = current_action.acceleraton * -unit_drop_bounce_factor;
         // if the unit is under and is moving too slowly, then we can assume they've stopped bouncing
-        if (Math.abs(current_action.acceleraton) < unit_drop_gravity*5 ){
+        // of if we have the game speed up, dont even worry, just end it there to speed things up
+        if (Math.abs(current_action.acceleraton) < unit_drop_gravity*5 || action_speed >= 2 ){
             // cleanup the highlight
             // we dont have highlights on that unit, we created them with the thing queue
             //clear_unit_highlights(current_action.unit);
@@ -1942,8 +1966,12 @@ function recieved_packet_from_server(data){
         update_time(data.content.turn_time, data.content.action_time);
     }
     else if (data.type == SERVER_request_moves){
-        server_connection.send({type: CLIENT_submit_moves, content: return_action_queue_and_cleanup()});
-        enable_action_mode();
+        if (!is_in_action_mode){
+            server_connection.send({type: CLIENT_submit_moves, content: return_action_queue_and_cleanup()});
+            enable_action_mode();
+        } else {
+            console.log("requested to sendback moves but hasn't finished processing the last ones, not sending anything back");
+        }
     }
     else if (data.type == SERVER_sendback_moves){
         // call that function  whatever it is
@@ -1953,24 +1981,13 @@ function recieved_packet_from_server(data){
         //  we are also going to process the objective discovery events immediately? 
         // it would probably be a better idea to aniumate these a s it would hten notify the playewr thats thats wherer theya are supposed to play
 
-        let new_stackion = data.content['moves'];
         server_verified_moners = data.content['money'];
-        for (let j = 0; j < new_stackion.length; j++){
-            let curr_Action = new_stackion[j];
-            if (curr_Action.type == discover_unit){
-                queued_discover_units[curr_Action.pos[0] + ',' + curr_Action.pos[1]] = curr_Action;
-                console.log("unit discoverable at : " + curr_Action.pos[0] + ',' + curr_Action.pos[1]);
-                new_stackion.splice(j, 1);
-                j--; // make sure we account for the index that we just lost
-        }} // make sure we do the objectives in their own loop,else they would not properly dsicover units probably (althoug we can assume it'd be fine actually, due to the server implementation)
-        for (let j = 0; j < new_stackion.length; j++){
-            let curr_Action = new_stackion[j];
-            if (curr_Action.type == discover_objective){
-                client_create_objetive(curr_Action.pos);
-                new_stackion.splice(j, 1);
-                j--; // how did we forget this :skull: :moyai:
-        }} // then push to the main stackion
-        stackions_to_commit.push(new_stackion);
+        stackions_to_commit.push(data.content['moves']); // load new stackion
+        if (stackions_to_commit.length > 1){
+            console.log("warning: " + stackions_to_commit.length + " stackions to process, not recommended to have more than 1 set of actions being processed at once")
+        } else { // we are free to process the single non-queued stackion
+            preprocess_first_stackion();
+        }
         
         has_recieved_actions = true;
     }
@@ -1978,6 +1995,29 @@ function recieved_packet_from_server(data){
         console.log("recieved invalid packet type: " + data.type); 
     }
 }
+function preprocess_first_stackion(){
+    // reset action phase, so we never have it cause issues with multiple stacks of actions
+    action_phase = committing_attack_actions;
+
+    let new_stackion = stackions_to_commit[0];
+    for (let j = 0; j < new_stackion.length; j++){
+        let curr_Action = new_stackion[j];
+        if (curr_Action.type == discover_unit){
+            queued_discover_units[curr_Action.pos[0] + ',' + curr_Action.pos[1]] = curr_Action;
+            console.log("unit discoverable at : " + curr_Action.pos[0] + ',' + curr_Action.pos[1]);
+            new_stackion.splice(j, 1);
+            j--; // make sure we account for the index that we just lost
+    }} // make sure we do the objectives in their own loop,else they would not properly dsicover units probably (althoug we can assume it'd be fine actually, due to the server implementation)
+    for (let j = 0; j < new_stackion.length; j++){
+        let curr_Action = new_stackion[j];
+        if (curr_Action.type == discover_objective){
+            client_create_objetive(curr_Action.pos);
+            new_stackion.splice(j, 1);
+            j--; // how did we forget this :skull: :moyai:
+    }}
+    console.log(new_stackion.length + " actions in next stackion to do")
+}
+
 function load_chat_mesage(m_text, color){
     UI_add_message(m_text, color);
     // and then append to client min chat
@@ -2043,7 +2083,7 @@ const hex_digits = ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9', 'A', 'B', 
 server_pinfo_color.value = "#" + get_random_color_hex() + get_random_color_hex() + get_random_color_hex();
 console.log(server_pinfo_color.value);
 function get_random_color_hex(){
-    return random_hex_char(6) + random_hex_char(0);
+    return random_hex_char(1) + random_hex_char(0);
 }
 function random_hex_char(min){ // between 0-16 for min
     let hex_value = Math.floor(Math.random() * (16-min)) + min;
