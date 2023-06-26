@@ -1054,7 +1054,7 @@ function PROGRESS_attack_piece(){
         current_action.unit.mesh.position.copy(next_step_pos);
     }
     if (current_action.target_exists != false) { // null should be true here
-        if (!current_action.has_impacted && curr_distance != null && curr_distance.length() < attack_impact_distance){
+        if (!current_action.has_impacted && ((curr_distance != null && curr_distance.length() < attack_impact_distance) || !current_action.outbound)){
             // now update the health of the unit
             current_action.target.defense = current_action.target_new_health;
             current_action.has_impacted = true
@@ -2025,14 +2025,18 @@ function load_chat_mesage(m_text, color){
 }
 function client_error(err){
     console.log("client connection experienced error:\n"+err);
-    load_chat_mesage("peerjs server connection error, this may cause issues", "#ff0000");
-    //abort_connection(err);
-}
+    if (connection_state < 4) {
+        abort_connection(err);
+    } else {
+        load_chat_mesage("peerjs server connection error, this may cause issues", "#ff0000");
+}}
 function server_error(err){
     console.log("connection to server experienced error:\n"+err);
-    load_chat_mesage("game session server connection error, connection probably lost", "#ff0000");
-    //abort_connection(err);
-}
+    if (connection_state < 4) {
+        abort_connection(err);
+    } else {
+        load_chat_mesage("game session server connection error, connection probably lost", "#ff0000");
+}}
 
 var playerlist_box = document.getElementById("playernames_field");
 function load_player(player_object){
@@ -2046,6 +2050,8 @@ function load_player(player_object){
 function abort_connection(abort_reason){
     if (connection_state >= 4) {
         // they have to refresh the page, too much data to fixup
+
+        
     }
     connection_state = 0
     // clear entered code
