@@ -777,36 +777,6 @@ function commit_actions()
         }
     }
 
-    // //////////////////////// //
-    // PROCESS DESTROYED UNITS //
-    // ////////////////////// //
-    for (let jjj = 0; jjj < destroyed_units.length; jjj++){
-        // then delete the unit from the match
-        let killed_unit = destroyed_units[jjj];
-        let destroyed_unit_key = get_server_unit_KEY_by_id(killed_unit);
-        if (destroyed_unit_key == null){
-            console.log("failed to kill unit due to key being missing, attempting workaround");
-            destroyed_unit_key = killed_unit.pos[0]+','+killed_unit.pos[1];
-        }
-        for (let key in players){
-            let curr_player = players[key];
-            if (curr_player.connection == null) continue; // do not run for server
-            // clear sight for owner
-            if (curr_player.id == killed_unit.owner){
-                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: killed_unit.unit_id });
-                player_stop_seeing_area(curr_player, killed_unit.pos[0], killed_unit.pos[1], killed_unit.vision_range);
-                delete curr_player.vis_units[destroyed_unit_key];
-            }
-            // else clear the unit from seen units
-            else if (curr_player.vis_units[destroyed_unit_key] != null){
-                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: killed_unit.unit_id });
-                delete curr_player.vis_units[destroyed_unit_key];
-            }
-        }
-        // i feel like theres more references that we need to scrub when doing this
-        delete server_units[destroyed_unit_key];
-    }
-
     // ////////////////////////////// //
     // REPROCESS THE CREATION EVENTS //
     // //////////////////////////// //
@@ -864,6 +834,37 @@ function commit_actions()
         }
         
     }
+
+    // //////////////////////// //
+    // PROCESS DESTROYED UNITS //
+    // ////////////////////// //
+    for (let jjj = 0; jjj < destroyed_units.length; jjj++){
+        // then delete the unit from the match
+        let killed_unit = destroyed_units[jjj];
+        let destroyed_unit_key = get_server_unit_KEY_by_id(killed_unit);
+        if (destroyed_unit_key == null){
+            console.log("failed to kill unit due to key being missing, attempting workaround");
+            destroyed_unit_key = killed_unit.pos[0]+','+killed_unit.pos[1];
+        }
+        for (let key in players){
+            let curr_player = players[key];
+            if (curr_player.connection == null) continue; // do not run for server
+            // clear sight for owner
+            if (curr_player.id == killed_unit.owner){
+                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: killed_unit.unit_id });
+                player_stop_seeing_area(curr_player, killed_unit.pos[0], killed_unit.pos[1], killed_unit.vision_range);
+                delete curr_player.vis_units[destroyed_unit_key];
+            }
+            // else clear the unit from seen units
+            else if (curr_player.vis_units[destroyed_unit_key] != null){
+                curr_player.recieved_moves.push({ type: destroy_unit, unit_id: killed_unit.unit_id });
+                delete curr_player.vis_units[destroyed_unit_key];
+            }
+        }
+        // i feel like theres more references that we need to scrub when doing this
+        delete server_units[destroyed_unit_key];
+    }
+
     // /////////////////////////////// //
     // AWARD MONEY FOR THE OBJECTIVES //
     // ///////////////////////////// //
